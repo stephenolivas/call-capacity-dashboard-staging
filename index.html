@@ -1,140 +1,256 @@
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"><title>Calendly API Test</title>
+<html><head><meta charset="UTF-8"><title>Calendly API Test v2</title>
 <style>
-  body { font-family: monospace; background: #1a1a1a; color: #e0e0e0; padding: 2rem; }
-  pre { white-space: pre-wrap; line-height: 1.6; font-size: 14px; }
+  body { font-family: monospace; background: #1a1a1a; color: #e0e0e0; padding: 2rem; max-width: 1200px; }
+  pre { white-space: pre-wrap; line-height: 1.6; font-size: 13px; }
   h1 { color: #1b7a2e; }
   .time { color: #888; font-size: 12px; }
 </style></head><body>
-<h1>Calendly API Test Results</h1>
-<p class="time">Last run: 2026-05-11 16:10 UTC</p>
+<h1>Calendly API Test v2 — Finding Team Calendars</h1>
+<p class="time">Last run: 2026-05-11 16:17 UTC</p>
 <pre>============================================================
-CALENDLY API TEST
+CALENDLY API TEST v2 — Finding Team Calendars
 ============================================================
 
-📋 Step 1: Verify authentication...
-   ✅ Authenticated as: Stephen Olivas
-   User URI: https://api.calendly.com/users/c8118911-6a06-4f3f-8a8c-3d3c397012f6
+📋 Step 1: Authentication...
+   ✅ User: Stephen Olivas
    Org URI: https://api.calendly.com/organizations/277c4839-a060-431e-b88b-722bd5526e51
 
-📋 Step 2: Finding event type UUIDs...
+📋 Step 2: Checking routing forms...
+   Found 9 routing form(s)
+   - Not qualified | status: draft
+     URI: https://api.calendly.com/routing_forms/f32e7cc9-eb41-4d48-9ec8-2d5bd2c6c952
+     Has questions: 0 entries
+   - Demo Form TEST | status: published
+     URI: https://api.calendly.com/routing_forms/4dc3b139-7688-4c9f-8e37-b039976a6c69
+     Has questions: 0 entries
+   - Demo Form TEST | status: draft
+     URI: https://api.calendly.com/routing_forms/edbd7293-87b6-4820-982f-d21783a8d20d
+     Has questions: 0 entries
+   - Demo Form TEST | status: draft
+     URI: https://api.calendly.com/routing_forms/83ecb5e3-7361-4a3d-baf1-89525e0459b8
+     Has questions: 0 entries
+   - CALENDLY QUESTIONS | status: published
+     URI: https://api.calendly.com/routing_forms/a966db1b-fe8f-40a0-a346-fbf109ec825c
+     Has questions: 0 entries
+   - CALENDLY QUESTIONS | status: draft
+     URI: https://api.calendly.com/routing_forms/ff379445-6284-4a32-879b-48790cffe8ec
+     Has questions: 0 entries
+   - Typeform (ID: HRJQbKWS-v2-TekwC). Fields and questions must be updated on Typeform. | status: draft
+     URI: https://api.calendly.com/routing_forms/af3300b0-2dac-4492-986d-881312cf221f
+     Has questions: 0 entries
+   - Typeform (ID: HRJQbKWS-v2-TekwC). Fields and questions must be updated on Typeform. | status: published
+     URI: https://api.calendly.com/routing_forms/0ebff2f9-8835-4181-8e94-1dfad4589173
+     Has questions: 0 entries
+   - Calendly Lead Qualification & Scoring Form | status: published
+     URI: https://api.calendly.com/routing_forms/2452be97-cb07-4b50-9894-3ea095caf0bc
+     Has questions: 12 entries
 
-   ⚠️ Only found 0 of 2 target event types!
-   All active event types in org:
-     - 15min Progress Call → https://calendly.com/vpr-sut/pgr-call
-     - 30min Gameplan Call → https://calendly.com/vpr-sut/gp-call
-     - 30min Heads-Up Call → https://calendly.com/vpr-st/hu-call
-     - 30 Min Meeting → https://calendly.com/john-modern-amenities/30min
-     - 30 Min Meeting → https://calendly.com/lyle-modern-amenities/30min
-     - 30 Min Meeting → https://calendly.com/robin-modern-amenities/30min
-     - 30 Min Meeting → https://calendly.com/scott-modern-amenities/30min
-     - 30 Min Meeting → https://calendly.com/christian-modern-amenities/30min
-     - 30 Min Meeting → https://calendly.com/steven-modern-amenities/30min
-     - 30 Min Meeting w/Sean → https://calendly.com/sean-wescalecreators/30min
-     - 30min Upgrade Call → https://calendly.com/vpr-st/upg-call
-     - 30 Minute Meeting → https://calendly.com/mhoffmann-modern-amenities/30min
-     - 30 Minute Meeting → https://calendly.com/jeffery-modern-amenities/30min
-     - 30 Minute Meeting → https://calendly.com/joedysert-modern-amenities/30min
-     - 30 Minute Meeting → https://calendly.com/alysia-modern-amenities/30min
-     - 30 Minute Meeting → https://calendly.com/christabel-modern-amenities/30min
-     - 30 Minute Meeting → https://calendly.com/jasonaaron-modern-amenities/30min
-     - 30 Minute Meeting → https://calendly.com/eric-modern-amenities/30min
-     - 30 Minute Meeting → https://calendly.com/adam-modern-amenities/30min
-     - 30 Minute Meeting → https://calendly.com/quentin-modern-amenities/30min
-     - 30 Minute Meeting → https://calendly.com/ma-wescalecreators/30min
-     - 30 Minute Meeting → https://calendly.com/stephen-modern-amenities/30min
-     - 30 Minute Meeting → https://calendly.com/christopher-modern-amenities/30min
-     - 30 Minute Meeting → https://calendly.com/elvisellis-modern-amenities/30min
-     - 30 Minute Meeting → https://calendly.com/bryan-barcus-modern-amenities/30min
-     - 30 Minute Meeting → https://calendly.com/kelly-modern-amenities/30min
-     - 30 Minute Meeting → https://calendly.com/joe-breakthroughclosing/30min
-     - 30 Minute Meeting → https://calendly.com/matt-breakthroughclosing/30min
-     - 30 Minute Meeting → https://calendly.com/jakes-modern-amenities/30min
-     - 30 Minute Meeting → https://calendly.com/dubem-modern-amenities/30min
-     - 30 Minute Phone Interview → https://calendly.com/melissa-modern-amenities/30min
-     - 45 Minute VP Coach Session → https://calendly.com/lyle-modern-amenities/45min
-     - Acquisition Ace Strategy Call → https://calendly.com/joe-breakthroughclosing/acquisition-ace-strategy-call
-     - AI Smart Machine Placement → https://calendly.com/adam-modern-amenities/ai-smart-machine-placement
-     - Bruno Recordings <> UniCult → https://calendly.com/kamalprasats/bruno-recordings
-     - Christian's First Call - 45 Minute Meeting → https://calendly.com/christian-modern-amenities/45min
-     - Follow-up Call → https://calendly.com/ryan-breakthroughclosing/follow-up-call
-     - Founder's Office <> Interview → https://calendly.com/kamalprasats/unicult-founders-office
-     - Getting Started with VP → https://calendly.com/mallory-modern-amenities/are-we-a-good-fit
-     - GM Interview → https://calendly.com/anthony-modern-amenities/gm-interview
-     - Intern 1:1 → https://calendly.com/melissa-modern-amenities/intern-1-1
-     - Interview Calls → https://calendly.com/thomas-modern-amenities/interview-calls
-     - Interviews - GTM → https://calendly.com/modern-amenities/interviews
-     - Interviews - Jess Mayo → https://calendly.com/modern-amenities/interviews-gtm-clone
-     - Kickoff Call → https://calendly.com/mrpassive/passive-income-accelerator-call-2-clone
-     - Kickoff Call (Google Meet) → https://calendly.com/mrpassive/kickoff-call-google-meet
-     - Meet With Alysia  → https://calendly.com/alysia-modern-amenities/new-meeting
-     - Modern-Amenities In-Person Interview → https://calendly.com/joedysert-modern-amenities/modern-amenities-in-person-interview
-     - Modern-Amenities In-Person Interview → https://calendly.com/melissa-modern-amenities/modern-amenities-in-person-interview
-     - New Meeting → https://calendly.com/elvisellis-modern-amenities/new-meeting
-     - New Meeting → https://calendly.com/kelly-modern-amenities/new-meeting
-     - New Vendingpreneur Strategy Call → https://calendly.com/mallory-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/scott-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/john-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/ryan-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/mrpassive/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/jasonaaron-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/eric-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/christian-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/robin-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/lyle-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/spencer-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/anthony-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/joedysert-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/christopher-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/elvisellis-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/vince-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/jakes-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/kamalprasats/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/maureen-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/kelly-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/bryan-barcus-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/steven-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/cameron-caswell-modern-amenities/new-vendingpreneur-strategy-call
-     - New Vendingpreneur Strategy Call → https://calendly.com/dubem-modern-amenities/new-vendingpreneur-strategy-call
-     - Partnership Talks <> Alex → https://calendly.com/kamalprasats/partnership-talks-alex
-     - Platinum Kick-Off Call → https://calendly.com/thomas-modern-amenities/group_kickoff
-     - Post Masterclass Strategy Call → https://calendly.com/christian-modern-amenities/new-meeting
-     - Silver Kick-Off Call → https://calendly.com/thomas-modern-amenities/group_kickoff-silver
-     - SPM Tech-call → https://calendly.com/test27777/test-ig-1
-     - TEST 27 (IG1) → https://calendly.com/test27777/test-27-ig
-     - UniCult Closed Beta → https://calendly.com/kamalprasats/unicult-closed-beta
-     - UniCult <> Potent Explorations → https://calendly.com/kamalprasats/unicult-potent-explorations
-     - Vendingpreneurs Follow Up → https://calendly.com/adam-modern-amenities/vp-followup-template
-     - Vendingpreneurs Follow Up  → https://calendly.com/robin-modern-amenities/vendingpreneurs-follow-up-active-duplicate
-     - Vendingpreneurs Follow-Up → https://calendly.com/alysia-modern-amenities/vendingpreneurs-follow-up-active
-     - Vendingpreneurs Follow-Up → https://calendly.com/ryan-modern-amenities/vendingpreneurs-follow-up-active
-     - Vendingpreneurs Follow-Up → https://calendly.com/mrpassive/vendingpreneurs-follow-up-active
-     - Vendingpreneurs Follow-Up → https://calendly.com/robin-modern-amenities/vendingpreneurs-follow-up-active
-     - Vendingpreneurs Follow-Up → https://calendly.com/scott-modern-amenities/vendingpreneurs-follow-up-active
-     - Vendingpreneurs Follow-Up → https://calendly.com/christian-modern-amenities/vendingpreneurs-follow-up-active
-     - Vendingpreneurs Follow-Up → https://calendly.com/john-modern-amenities/vendingpreneurs-follow-up-active
-     - Vendingpreneurs Follow-Up → https://calendly.com/spencer-modern-amenities/vendingpreneurs-follow-up-active
-     - Vendingpreneurs Follow-Up → https://calendly.com/lyle-modern-amenities/vendingpreneurs-follow-up-active
-     - Vendingpreneurs Follow-Up → https://calendly.com/anthony-modern-amenities/vendingpreneurs-follow-up-active
-     - Vendingpreneurs Follow-Up → https://calendly.com/eric-modern-amenities/vendingpreneurs-follow-up-active
-     - Vendingpreneurs Follow-Up → https://calendly.com/modern-amenities/vendingpreneurs-follow-up-active
-     - Vendingpreneurs Follow-Up → https://calendly.com/jasonaaron-modern-amenities/vendingpreneurs-follow-up-active
-     - Vendingpreneurs Follow-Up → https://calendly.com/christopher-modern-amenities/vendingpreneurs-follow-up-active
+📋 Step 3: All event types (checking for /d/ URLs and target names)...
+   Total event types found: 152
 
-📋 Step 3: Querying available time slots + booked events...
-   TODAY | TOTAL: 0 avail + 0 booked = 0 capacity
+   ⚠️ No matches found by slug or name
 
-   Tue 05/12 | TOTAL: 0 avail + 0 booked = 0 capacity
+   Event types containing 'vending', 'consultation', or 'accelerator':
+   - New Vendingpreneur Strategy Call | https://calendly.com/mallory-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/scott-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/john-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/ryan-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/mrpassive/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/jasonaaron-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/eric-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/christian-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/robin-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/lyle-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/spencer-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/anthony-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/joedysert-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/christopher-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/elvisellis-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/vince-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/jakes-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/kamalprasats/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/maureen-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/kelly-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/bryan-barcus-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/steven-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/cameron-caswell-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - New Vendingpreneur Strategy Call | https://calendly.com/dubem-modern-amenities/new-vendingpreneur-strategy-call | kind: solo | active: True
+   - Passive Income Accelerator Call (Google Meet) | https://calendly.com/mrpassive/vending-premium-package | kind: solo | active: False
+   - Resources for Vending Accelerator  | https://calendly.com/scott-modern-amenities/45min | kind: solo | active: False
+   - Vendingpreneurs Follow Up | https://calendly.com/adam-modern-amenities/vp-followup-template | kind: solo | active: True
+   - Vendingpreneurs Follow Up  | https://calendly.com/robin-modern-amenities/vendingpreneurs-follow-up-active-duplicate | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/joedysert-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: False
+   - Vendingpreneurs Follow-Up | https://calendly.com/alysia-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/ryan-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/mrpassive/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/robin-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/scott-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/christian-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/john-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/spencer-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/lyle-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/anthony-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/eric-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/jasonaaron-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/christopher-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/elvisellis-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/vince-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/jakes-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/kamalprasats/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/maureen-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/kelly-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/bryan-barcus-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/steven-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/cameron-caswell-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Follow-Up | https://calendly.com/dubem-modern-amenities/vendingpreneurs-follow-up-active | kind: solo | active: True
+   - Vendingpreneurs Onboarding Call | https://calendly.com/onboarding-modern-amenities/onboarding | kind: group | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/joedysert-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: False
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/robin-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/anthony-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/jasonaaron-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/scott-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/lyle-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/eric-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/ryan-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/mrpassive/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/spencer-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/john-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/christian-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/christopher-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/elvisellis-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/vince-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/jakes-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/kamalprasats/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/maureen-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/kelly-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/bryan-barcus-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/steven-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/cameron-caswell-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - Vendingpreneurs Rescheduled Call | https://calendly.com/dubem-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
+   - VendingPreneurs Rescheduled Call | https://calendly.com/alysia-modern-amenities/vendingpreneurs-rescheduled-call | kind: solo | active: True
 
-   Wed 05/13 | TOTAL: 0 avail + 0 booked = 0 capacity
+📋 Step 4: Trying direct event type lookup by slug...
 
-   Thu 05/14 | TOTAL: 0 avail + 0 booked = 0 capacity
+📋 Step 5: Checking org groups/teams...
+   Found 3 group(s)
+   - Vendingpreneurs | URI: https://api.calendly.com/groups/ec95b7db-5ddf-41f0-b3c1-e6e5256f30bc
+     Members: 0
+   - CSM Team | URI: https://api.calendly.com/groups/15ec6c89-8675-4894-a553-b03b89089794
+     Members: 0
+   - BTC | URI: https://api.calendly.com/groups/a0965137-a26d-44ab-8995-c54383459b3f
+     Members: 0
 
-   Fri 05/15 | TOTAL: 0 avail + 0 booked = 0 capacity
+📋 Step 6: Today's scheduled events (all types, no filter)...
+   Found 78 scheduled events today
+   Events by type:
+     34x Vending Route Consultation
+     13x Vendingprenuers Consultation
+     10x Vending Strategy Call with Vendingpreneurs
+     5x Cash-Flowing Vending Route Advisory Interview
+     4x Vending Accelerator Call
+     4x Vending Quick Discovery
+     3x Acquisition Ace Strategy Call
+     2x New Vendingpreneur Strategy Call
+     1x 30 Minute Meeting
+     1x Vendingpreneurs Rescheduled Call
+     1x Vendingpreneurs Follow-Up
 
+📋 Step 7: Full JSON of first 3 event types (for debugging)...
+
+   --- 15min Progress Call ---
+   active: True
+   admin_managed: False
+   booking_method: instant
+   color: #8247f5
+   created_at: 2025-06-05T09:35:13.486344Z
+   custom_questions: [{'answer_choices': [], 'enabled': True, 'include_other': False, 'name': "What's your current situation with your business?", 'position': 0, 'required': True, 'type': 'text'}, {'answer_choices': [], 'enabled': True, 'include_other': False, 'name': "What's your next business acquisition goal?", 'position': 1, 'required': True, 'type': 'string'}]
+   deleted_at: None
+   description_html: <p><strong>Hi, Michael here! In this call we will look what happened so far and help you find a solution for your future plans.</strong></p><p><br></p><p>📌<strong> Keep it professional </strong>⬇️</p><p><strong>1.</strong> Join via computer &amp; stable internet 👨🏻‍💻</p><p><strong>2. </strong>Silent location to focus on the call 🤫</p><p><strong>3. </strong>Camera turned on 👋</p><p><strong>4.</strong> Be on time 🕑</p><p><br></p><p>If there is no free slot available, reach out to us via chat.</p><p><br></p><p>Thank you,</p><p>Michael</p>
+   description_plain: Hi, Michael here! In this call we will look what happened so far and help you find a solution for your future plans.
+
+
+📌 Keep it professional ⬇️
+
+1. Join via comput…
+   duration: 15
+   duration_options: []
+   internal_note: None
+   is_paid: False
+   kind: solo
+   locale: en
+   locations: [{'kind': 'zoom_conference'}, {'kind': 'google_conference'}]
+   name: 15min Progress Call
+   pooling_type: round_robin
+   position: 0
+   scheduling_url: https://calendly.com/vpr-sut/pgr-call
+   secret: False
+   slug: pgr-call
+   type: StandardEventType
+   updated_at: 2025-06-05T09:38:01.071626Z
+   uri: https://api.calendly.com/event_types/bce51f01-91b3-4806-b117-c3a35360d0e2
+
+   --- 15 Minute Intro Call ---
+   active: False
+   admin_managed: False
+   booking_method: instant
+   color: #8247f5
+   created_at: 2022-06-18T16:11:20.223222Z
+   custom_questions: [{'answer_choices': [], 'enabled': True, 'include_other': False, 'name': 'What are the goals of your call with Mike?', 'position': 0, 'required': False, 'type': 'text'}]
+   deleted_at: None
+   description_html: <p>Intro Call with Vendingpreneurs</p><p><br></p><p>If you need longer than 15 minutes sign up for the Gold consult!</p>
+   description_plain: Intro Call with Vendingpreneurs
+
+
+If you need longer than 15 minutes sign up for the Gold consult!
+   duration: 15
+   duration_options: None
+   internal_note: None
+   is_paid: False
+   kind: solo
+   locale: en
+   locations: None
+   name: 15 Minute Intro Call
+   pooling_type: None
+   position: 8
+   scheduling_url: https://calendly.com/mrpassive/10min
+   secret: False
+   slug: 10min
+   type: StandardEventType
+   updated_at: 2026-01-09T21:42:55.018623Z
+   uri: https://api.calendly.com/event_types/f47f14ba-d311-45ba-97f3-5f03bbfac47a
+
+   --- 15 min w/Mike - Private Calendar ---
+   active: False
+   admin_managed: False
+   booking_method: instant
+   color: #8247f5
+   created_at: 2023-10-11T00:26:21.524935Z
+   custom_questions: [{'answer_choices': [], 'enabled': True, 'include_other': False, 'name': 'Please share anything that will help prepare for our meeting.', 'position': 0, 'required': False, 'type': 'text'}]
+   deleted_at: None
+   description_html: None
+   description_plain: None
+   duration: 15
+   duration_options: None
+   internal_note: None
+   is_paid: False
+   kind: solo
+   locale: en
+   locations: None
+   name: 15 min w/Mike - Private Calendar
+   pooling_type: None
+   position: 4
+   scheduling_url: https://calendly.com/mrpassive/15-min-w-mike
+   secret: True
+   slug: 15-min-w-mike
+   type: StandardEventType
+   updated_at: 2026-01-09T21:42:55.018623Z
+   uri: https://api.calendly.com/event_types/6f16d513-764d-453e-b7c2-1b38016e04d0
 
 ============================================================
-TEST COMPLETE
+TEST v2 COMPLETE
 ============================================================</pre>
 </body></html>
