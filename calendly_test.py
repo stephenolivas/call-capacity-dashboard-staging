@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Calendly API Test Script
-========================
-Runs via GitHub Actions. Outputs results to index.html for GitHub Pages viewing.
-Reads CALENDLY_API_KEY from environment variable.
+Calendly API Test v2 — Finding Team Calendars
+==============================================
+Explores routing forms, team events, and alternative endpoints
+to locate the /d/ team calendar URLs.
 """
 
 import os
@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 
 CALENDLY_TOKEN = os.environ.get("CALENDLY_API_KEY", "")
 if not CALENDLY_TOKEN:
-    print("❌ CALENDLY_API_KEY not set. Add it as a GitHub secret.")
+    print("❌ CALENDLY_API_KEY not set.")
     sys.exit(1)
 
 HEADERS = {
@@ -22,10 +22,9 @@ HEADERS = {
     "Content-Type": "application/json",
 }
 
-TARGET_SLUGS = {
-    "cxv9-jg6-m53": "Vending Accelerator Call",
-    "cxfn-hh2-h8g": "Vendingpreneurs Consultation",
-}
+# The /d/ slugs we're looking for
+TARGET_SLUGS = ["cxv9-jg6-m53", "cxfn-hh2-h8g"]
+TARGET_NAMES = ["Vending Accelerator Call", "Vendingpreneurs Consultation"]
 
 results = []
 
@@ -35,175 +34,203 @@ def log(msg):
 
 def api_get(url, params=None):
     resp = requests.get(url, headers=HEADERS, params=params)
-    resp.raise_for_status()
+    if resp.status_code != 200:
+        return {"error": resp.status_code, "text": resp.text[:300]}
     return resp.json()
 
 
 def main():
     log("=" * 60)
-    log("CALENDLY API TEST")
+    log("CALENDLY API TEST v2 — Finding Team Calendars")
     log("=" * 60)
 
-    # Step 1: Auth
-    log("\n📋 Step 1: Verify authentication...")
-    try:
-        user_data = api_get("https://api.calendly.com/users/me")
-        user_uri = user_data["resource"]["uri"]
-        org_uri = user_data["resource"]["current_organization"]
-        log(f"   ✅ Authenticated as: {user_data['resource']['name']}")
-        log(f"   User URI: {user_uri}")
-        log(f"   Org URI: {org_uri}")
-    except Exception as e:
-        log(f"   ❌ Auth failed: {e}")
+    # Step 1: Auth + get org info
+    log("\n📋 Step 1: Authentication...")
+    user_data = api_get("https://api.calendly.com/users/me")
+    if "error" in user_data:
+        log(f"   ❌ Auth failed: {user_data}")
         write_html()
         sys.exit(1)
+    user_uri = user_data["resource"]["uri"]
+    org_uri = user_data["resource"]["current_organization"]
+    log(f"   ✅ User: {user_data['resource']['name']}")
+    log(f"   Org URI: {org_uri}")
 
-    # Step 2: Find event types
-    log("\n📋 Step 2: Finding event type UUIDs...")
-    try:
-        et_data = api_get("https://api.calendly.com/event_types", {
-            "organization": org_uri,
-            "active": "true",
-            "count": 100,
-        })
-    except Exception as e:
-        log(f"   ❌ Could not fetch event types: {e}")
-        write_html()
-        sys.exit(1)
+    # Step 2: Check routing forms
+    log("\n📋 Step 2: Checking routing forms...")
+    rf_data = api_get("https://api.calendly.com/routing_forms", {
+        "organization": org_uri,
+        "count": 100,
+    })
+    if "error" in rf_data:
+        log(f"   ❌ Routing forms error: {rf_data}")
+    else:
+        forms = rf_data.get("collection", [])
+        log(f"   Found {len(forms)} routing form(s)")
+        for form in forms:
+            name = form.get("name", "Unnamed")
+            uri = form.get("uri", "")
+            status = form.get("status", "?")
+            log(f"   - {name} | status: {status}")
+            log(f"     URI: {uri}")
+            # Check for our target slugs in any field
+            form_str = json.dumps(form)
+            for slug in TARGET_SLUGS:
+                if slug in form_str:
+                    log(f"     ✅ Contains target slug: {slug}")
+            # Show form questions/routing rules if available
+            for key in ["questions", "routing_rules"]:
+                if key in form:
+                    log(f"     Has {key}: {len(form[key])} entries")
 
-    found_types = {}
-    for et in et_data.get("collection", []):
+    # Step 3: Check ALL event types (including inactive, paginated)
+    log("\n📋 Step 3: All event types (checking for /d/ URLs and target names)...")
+    all_event_types = []
+    next_page = "https://api.calendly.com/event_types"
+    params = {"organization": org_uri, "count": 100}
+    page = 1
+    while next_page:
+        et_data = api_get(next_page, params if page == 1 else None)
+        if "error" in et_data:
+            log(f"   ❌ Event types error: {et_data}")
+            break
+        batch = et_data.get("collection", [])
+        all_event_types.extend(batch)
+        next_page = et_data.get("pagination", {}).get("next_page_token")
+        if next_page:
+            next_page = f"https://api.calendly.com/event_types?page_token={next_page}&count=100&organization={org_uri}"
+        else:
+            next_page = None
+        page += 1
+
+    log(f"   Total event types found: {len(all_event_types)}")
+
+    # Search for target slugs and names
+    matches = []
+    for et in all_event_types:
         url = et.get("scheduling_url", "")
-        for target_slug, target_name in TARGET_SLUGS.items():
-            if target_slug in url:
-                found_types[target_name] = {
-                    "uri": et["uri"],
-                    "name": et["name"],
-                    "slug": target_slug,
-                    "url": url,
-                    "duration": et.get("duration"),
-                    "kind": et.get("kind"),
-                    "pooling_type": et.get("pooling_type"),
-                }
-                log(f"   ✅ Found: {et['name']}")
-                log(f"      URI: {et['uri']}")
-                log(f"      Duration: {et.get('duration')} min")
-                log(f"      Kind: {et.get('kind')} | Pooling: {et.get('pooling_type')}")
+        name = et.get("name", "")
+        et_str = json.dumps(et)
 
-    if len(found_types) < 2:
-        log(f"\n   ⚠️ Only found {len(found_types)} of 2 target event types!")
-        log("   All active event types in org:")
-        for et in et_data.get("collection", []):
-            log(f"     - {et['name']} → {et.get('scheduling_url')}")
+        is_match = False
+        for slug in TARGET_SLUGS:
+            if slug in et_str:
+                is_match = True
+                log(f"\n   ✅ SLUG MATCH: {slug}")
+        for tname in TARGET_NAMES:
+            if tname.lower() in name.lower():
+                is_match = True
+                log(f"\n   ✅ NAME MATCH: {tname}")
 
-    # Step 3: Available times + booked events
-    log("\n📋 Step 3: Querying available time slots + booked events...")
+        if is_match:
+            matches.append(et)
+            log(f"   Name: {name}")
+            log(f"   URI: {et.get('uri')}")
+            log(f"   URL: {url}")
+            log(f"   Kind: {et.get('kind')} | Type: {et.get('type')}")
+            log(f"   Pooling: {et.get('pooling_type')}")
+            log(f"   Active: {et.get('active')}")
+            log(f"   Duration: {et.get('duration')} min")
+
+    if not matches:
+        log("\n   ⚠️ No matches found by slug or name")
+        # Show event types with 'vending' or 'consultation' or 'accelerator' in name
+        log("\n   Event types containing 'vending', 'consultation', or 'accelerator':")
+        for et in all_event_types:
+            name = et.get("name", "").lower()
+            if "vending" in name or "consultation" in name or "accelerator" in name:
+                log(f"   - {et.get('name')} | {et.get('scheduling_url')} | kind: {et.get('kind')} | active: {et.get('active')}")
+
+    # Step 4: Try direct lookup of /d/ URLs
+    log("\n📋 Step 4: Trying direct event type lookup by slug...")
+    for slug in TARGET_SLUGS:
+        # Try various API patterns
+        for attempt_url in [
+            f"https://api.calendly.com/event_types?organization={org_uri}&slug={slug}",
+        ]:
+            resp = api_get(attempt_url)
+            if "error" not in resp:
+                matches_found = [et for et in resp.get("collection", []) if slug in json.dumps(et)]
+                if matches_found:
+                    log(f"   ✅ Found {slug} via direct lookup!")
+                    for m in matches_found:
+                        log(f"      {m.get('name')} → {m.get('uri')}")
+
+    # Step 5: Check teams/groups in org
+    log("\n📋 Step 5: Checking org groups/teams...")
+    groups_data = api_get("https://api.calendly.com/groups", {
+        "organization": org_uri,
+    })
+    if "error" in groups_data:
+        log(f"   Groups endpoint: {groups_data}")
+    else:
+        groups = groups_data.get("collection", [])
+        log(f"   Found {len(groups)} group(s)")
+        for g in groups:
+            log(f"   - {g.get('name', 'Unnamed')} | URI: {g.get('uri')}")
+            log(f"     Members: {len(g.get('member_ids', []))}")
+
+    # Step 6: Try fetching scheduled events directly (without event_type filter)
+    log("\n📋 Step 6: Today's scheduled events (all types, no filter)...")
     today = datetime.utcnow().date()
+    sched = api_get("https://api.calendly.com/scheduled_events", {
+        "organization": org_uri,
+        "min_start_time": f"{today}T00:00:00Z",
+        "max_start_time": f"{today}T23:59:59Z",
+        "status": "active",
+        "count": 100,
+    })
+    if "error" not in sched:
+        events = sched.get("collection", [])
+        log(f"   Found {len(events)} scheduled events today")
+        # Group by event type
+        by_type = {}
+        for ev in events:
+            et_uri = ev.get("event_type", "unknown")
+            et_name = ev.get("name", "?")
+            key = f"{et_name}"
+            by_type[key] = by_type.get(key, 0) + 1
+            # Check if any match our targets
+            ev_str = json.dumps(ev)
+            for slug in TARGET_SLUGS:
+                if slug in ev_str:
+                    log(f"   ✅ FOUND TARGET SLUG in scheduled event: {slug}")
+                    log(f"      Event: {ev.get('name')} | {ev.get('start_time')}")
+                    log(f"      Event Type URI: {et_uri}")
 
-    for day_offset in range(5):
-        check_date = today + timedelta(days=day_offset)
-        start = f"{check_date}T00:00:00Z"
-        end = f"{check_date}T23:59:59Z"
-        day_label = "TODAY" if day_offset == 0 else check_date.strftime("%a %m/%d")
+        log("   Events by type:")
+        for name, count in sorted(by_type.items(), key=lambda x: -x[1]):
+            log(f"     {count}x {name}")
+    else:
+        log(f"   ❌ Error: {sched}")
 
-        total_available = 0
-        total_booked = 0
-
-        for name, info in found_types.items():
-            try:
-                avail = api_get("https://api.calendly.com/event_type_available_times", {
-                    "event_type": info["uri"],
-                    "start_time": start,
-                    "end_time": end,
-                })
-                available_count = len(avail.get("collection", []))
-                total_available += available_count
-            except Exception as e:
-                available_count = f"ERR: {e}"
-
-            try:
-                sched = api_get("https://api.calendly.com/scheduled_events", {
-                    "organization": org_uri,
-                    "event_type": info["uri"],
-                    "min_start_time": start,
-                    "max_start_time": end,
-                    "status": "active",
-                    "count": 100,
-                })
-                booked_count = len(sched.get("collection", []))
-                total_booked += booked_count
-            except Exception as e:
-                booked_count = f"ERR: {e}"
-
-            log(f"   {day_label} | {name}: {available_count} avail, {booked_count} booked")
-
-        total_capacity = total_available + total_booked
-        log(f"   {day_label} | TOTAL: {total_available} avail + {total_booked} booked = {total_capacity} capacity")
-        log("")
-
-    # Step 4: Raw slots for today
-    if found_types:
-        log("\n📋 Step 4: Raw available slots for today (first event type)...")
-        first_type = list(found_types.values())[0]
-        start = f"{today}T00:00:00Z"
-        end = f"{today}T23:59:59Z"
-        try:
-            avail = api_get("https://api.calendly.com/event_type_available_times", {
-                "event_type": first_type["uri"],
-                "start_time": start,
-                "end_time": end,
-            })
-            for slot in avail.get("collection", []):
-                st = slot.get("start_time", "")
-                et_time = slot.get("end_time", "")
-                remaining = slot.get("invitees_remaining", "?")
-                status = slot.get("status", "?")
-                log(f"   {st} → {et_time} | remaining: {remaining} | status: {status}")
-            log(f"   Total: {len(avail.get('collection', []))} slots")
-        except Exception as e:
-            log(f"   ERROR: {e}")
-
-    # Step 5: Raw scheduled events for today
-    if found_types:
-        log("\n📋 Step 5: Raw scheduled events for today (first event type)...")
-        try:
-            sched = api_get("https://api.calendly.com/scheduled_events", {
-                "organization": org_uri,
-                "event_type": first_type["uri"],
-                "min_start_time": f"{today}T00:00:00Z",
-                "max_start_time": f"{today}T23:59:59Z",
-                "status": "active",
-                "count": 100,
-            })
-            for ev in sched.get("collection", []):
-                st = ev.get("start_time", "")
-                et_time = ev.get("end_time", "")
-                name = ev.get("name", "?")
-                log(f"   {st} → {et_time} | {name}")
-            log(f"   Total: {len(sched.get('collection', []))} events")
-        except Exception as e:
-            log(f"   ERROR: {e}")
+    # Step 7: Dump full JSON of first few event types for debugging
+    log("\n📋 Step 7: Full JSON of first 3 event types (for debugging)...")
+    for et in all_event_types[:3]:
+        log(f"\n   --- {et.get('name')} ---")
+        for key, val in et.items():
+            if key not in ("profile",):  # skip large nested objects
+                log(f"   {key}: {val}")
 
     log("\n" + "=" * 60)
-    log("TEST COMPLETE")
+    log("TEST v2 COMPLETE")
     log("=" * 60)
 
     write_html()
 
 
 def write_html():
-    """Write results to index.html for GitHub Pages viewing."""
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
     body = "\n".join(results)
     html = f"""<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><title>Calendly API Test</title>
+<html><head><meta charset="UTF-8"><title>Calendly API Test v2</title>
 <style>
-  body {{ font-family: monospace; background: #1a1a1a; color: #e0e0e0; padding: 2rem; }}
-  pre {{ white-space: pre-wrap; line-height: 1.6; font-size: 14px; }}
+  body {{ font-family: monospace; background: #1a1a1a; color: #e0e0e0; padding: 2rem; max-width: 1200px; }}
+  pre {{ white-space: pre-wrap; line-height: 1.6; font-size: 13px; }}
   h1 {{ color: #1b7a2e; }}
   .time {{ color: #888; font-size: 12px; }}
 </style></head><body>
-<h1>Calendly API Test Results</h1>
+<h1>Calendly API Test v2 — Finding Team Calendars</h1>
 <p class="time">Last run: {now}</p>
 <pre>{body}</pre>
 </body></html>"""
