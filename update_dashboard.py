@@ -45,12 +45,8 @@ CALENDLY_API_BASE = "https://api.calendly.com"
 CAPACITY_CACHE_FILE = "capacity_cache.json"
 
 LANE_1_CALENDLY_URIS = {
-    "https://api.calendly.com/event_types/d0362c50-1e8b-4230-952b-225fb339b4b9": "Scott Seymour",
-    "https://api.calendly.com/event_types/d21a1a7d-640b-41b8-9a27-b17c6bd3a446": "Eric Piccione",
-    "https://api.calendly.com/event_types/d79d10d6-7ef7-4aa7-b845-953ea719da97": "Christian Hartwell",
-    "https://api.calendly.com/event_types/f1748c62-210b-40e3-bdb0-cb1dbecfa258": "Robin Perkins",
-    "https://api.calendly.com/event_types/b107544d-2567-4db1-a47d-43c0c766ccad": "Chris Wanke",
-    "https://api.calendly.com/event_types/1977d6c2-e5ee-4721-8f33-bf802465c171": "Jake Skinner",
+    "https://api.calendly.com/event_types/3acb4582-147a-4652-ad6b-5effe4a1b755": "Vendingprenuers Consultation",
+    "https://api.calendly.com/event_types/f1a11c05-d0c0-41b7-aaec-b60bf5d96f39": "Vending Accelerator Call",
 }
 
 
@@ -65,20 +61,26 @@ def calendly_get(endpoint, params=None):
 
 
 def fetch_calendly_available_slots(dates):
-    """Fetch available time slots from Calendly for each Lane 1 rep per day.
+    """Fetch available time slots from Calendly team calendars per day.
     Returns: {date_obj: int} — available slot count per day.
     """
     if not CALENDLY_API_KEY:
         log("   ⚠ CALENDLY_API_KEY not set — skipping Calendly")
         return {}
 
-    log("📅 Fetching Calendly available slots...")
+    log("📅 Fetching Calendly available slots (team calendars)...")
+    now_utc = datetime.utcnow()
     result = {}
     for d in dates:
-        start = f"{d.isoformat()}T00:00:00Z"
+        # For today, use current time as start (can't query past times)
+        if d == now_utc.date():
+            start = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+        else:
+            start = f"{d.isoformat()}T00:00:00Z"
         end = f"{d.isoformat()}T23:59:59Z"
+
         day_available = 0
-        for uri, rep_name in LANE_1_CALENDLY_URIS.items():
+        for uri, cal_name in LANE_1_CALENDLY_URIS.items():
             try:
                 data = calendly_get(
                     f"{CALENDLY_API_BASE}/event_type_available_times",
@@ -110,6 +112,48 @@ def save_capacity_cache(cache):
     with open(CAPACITY_CACHE_FILE, "w") as f:
         json.dump(trimmed, f, indent=2)
     log(f"   💾 Capacity cache saved ({len(trimmed)} days)")
+
+
+def fetch_calendly_calendar_source(dates):
+    """Fetch scheduled events from Calendly grouped by event name per day.
+    Returns: {date_obj: {event_name: count}}
+    Used for the Calendar Source section in the day detail panel.
+    """
+    if not CALENDLY_API_KEY:
+        return {}
+
+    log("📅 Fetching Calendly calendar source data...")
+    try:
+        user_data = calendly_get(f"{CALENDLY_API_BASE}/users/me")
+        org_uri = user_data["resource"]["current_organization"]
+    except Exception as e:
+        log(f"   ⚠ Could not get Calendly org: {e}")
+        return {}
+
+    result = {}
+    for d in dates:
+        start = f"{d.isoformat()}T00:00:00Z"
+        end = f"{d.isoformat()}T23:59:59Z"
+        try:
+            sched = calendly_get(f"{CALENDLY_API_BASE}/scheduled_events", {
+                "organization": org_uri,
+                "min_start_time": start,
+                "max_start_time": end,
+                "status": "active",
+                "count": 100,
+            })
+            by_name = {}
+            for ev in sched.get("collection", []):
+                name = ev.get("name", "Unknown")
+                by_name[name] = by_name.get(name, 0) + 1
+            if by_name:
+                result[d] = by_name
+                total = sum(by_name.values())
+                log(f"   {d.strftime('%a %m/%d')}: {total} events across {len(by_name)} calendar types")
+        except Exception as e:
+            pass
+
+    return result
 
 EXCLUDED_USER_IDS = {
     "user_EmhqCmaHERTfgfWnPADiLGEqQw3ENvRYd3u1VEmblIp",
@@ -587,10 +631,10 @@ def fetch_meeting_booking_dates(valid_meetings):
     return booking_dates
 
 
-def build_day_detail(valid_meetings, booking_dates, lane_rep_names):
+def build_day_detail(valid_meetings, booking_dates, lane_rep_names, calendar_source=None):
     """Build per-day detail data for the day detail panel.
-    Returns: {date_iso_str: {total, funnels: [[name, count, pct], ...], booked_on: [[date, count, pct], ...]}}
-    Funnels: top 4 + "Other" bucket. Booked_on: distribution of created_at dates.
+    Returns: {date_iso_str: {total, funnels, reps, booked_on, calendar_source}}
+    calendar_source: {date_obj: {event_name: count}} from Calendly
     """
     from collections import Counter
 
@@ -636,11 +680,22 @@ def build_day_detail(valid_meetings, booking_dates, lane_rep_names):
         booked_items = sorted(data["booked_on"].items(), key=lambda x: x[0] if x[0] != "Unknown" else "9999")
         booked_list = [[d, c, round(c / total * 100)] for d, c in booked_items]
 
+        # Calendar source from Calendly
+        cal_source_list = None
+        if calendar_source:
+            d_obj = date.fromisoformat(ds)
+            if d_obj in calendar_source:
+                cal_data = calendar_source[d_obj]
+                cal_total = sum(cal_data.values())
+                cal_source_list = [[name, count, round(count / cal_total * 100)]
+                                   for name, count in sorted(cal_data.items(), key=lambda x: -x[1])]
+
         result[ds] = {
             "total": total,
             "funnels": funnel_list,
             "reps": rep_list,
             "booked_on": booked_list,
+            "calendar_source": cal_source_list,
         }
 
     return result
@@ -1228,6 +1283,19 @@ def generate_rolling_html(lane1_data, lane2_data, lane1_detail=None, lane2_detai
       }
       document.getElementById('dpReps').innerHTML = repHtml;
 
+      // Calendar Source
+      var calHtml = '';
+      if (detail.calendar_source && detail.calendar_source.length > 0) {
+        calHtml = '<table class="dp-booked-table">';
+        detail.calendar_source.forEach(function(cs) {
+          calHtml += '<tr><td>' + cs[0] + '</td><td>' + cs[1] + '</td><td>' + cs[2] + '%</td></tr>';
+        });
+        calHtml += '</table>';
+      } else {
+        calHtml = '<div class="dp-coming-soon">No calendar data for this day</div>';
+      }
+      document.getElementById('dpCalSource').innerHTML = calHtml;
+
       // Booked on
       var bookedHtml = '<table class="dp-booked-table">';
       if (detail.booked_on && detail.booked_on.length > 0) {
@@ -1301,7 +1369,7 @@ def generate_rolling_html(lane1_data, lane2_data, lane1_detail=None, lane2_detai
   <div id="dpReps"></div>
 
   <div class="dp-section">Calendar Source</div>
-  <div class="dp-coming-soon">Coming soon — Calendly integration in progress</div>
+  <div id="dpCalSource"></div>
 
   <div class="dp-section">When Booked</div>
   <div id="dpBooked"></div>
@@ -1958,12 +2026,17 @@ def main():
 
     # ── Day Detail Panel data ──
     log("\n═══ Day Detail Panel ═══")
+
+    # Fetch Calendly calendar source (event names) for detail panel
+    log("── Calendar Source (Calendly) ──")
+    calendar_source = fetch_calendly_calendar_source(rolling_dates)
+
     log("── Lane 1 meeting booking dates ──")
     l1_booking = fetch_meeting_booking_dates(lane1_data["valid_meetings"])
-    l1_detail = build_day_detail(lane1_data["valid_meetings"], l1_booking, LANE_1_REP_NAMES)
+    l1_detail = build_day_detail(lane1_data["valid_meetings"], l1_booking, LANE_1_REP_NAMES, calendar_source=calendar_source)
     log("── Lane 2 meeting booking dates ──")
     l2_booking = fetch_meeting_booking_dates(lane2_data["valid_meetings"])
-    l2_detail = build_day_detail(lane2_data["valid_meetings"], l2_booking, LANE_2_REP_NAMES)
+    l2_detail = build_day_detail(lane2_data["valid_meetings"], l2_booking, LANE_2_REP_NAMES, calendar_source=calendar_source)
 
     html = generate_rolling_html(lane1_data, lane2_data, lane1_detail=l1_detail, lane2_detail=l2_detail)
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f: f.write(html)
