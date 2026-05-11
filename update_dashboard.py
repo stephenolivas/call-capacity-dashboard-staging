@@ -1,156 +1,1667 @@
 #!/usr/bin/env python3
 """
-Calendly API Test Script
-========================
-Run this locally to verify the API works and see what data we get.
-Usage: python3 calendly_test.py
+Call Capacity Dashboard Generator (v13)
+
+New:
+- Funnel sections: External / In-House / Uncategorized
+- Monthly goals per funnel, divided by working days
+- All funnels always displayed (even with 0 counts)
+- "AK TikTok" and "Anthony IG" rows (Tik Tok + Anthony IG in Close)
+- Count/Goal format (e.g. 7/10) or count-only for funnels without goals
+- Archive system: daily snapshots + weekly summaries + monthly summaries
 """
 
-import requests
+import os
+import sys
 import json
-from datetime import datetime, timedelta
+import re
+import time
+import calendar
+from datetime import datetime, timedelta, date
+from zoneinfo import ZoneInfo
+from pathlib import Path
+import requests
 
-CALENDLY_TOKEN = "eyJraWQiOiIxY2UxZTEzNjE3ZGNmNzY2YjNjZWJjY2Y4ZGM1YmFmYThhNjVlNjg0MDIzZjdjMzJiZTgzNDliMjM4MDEzNWI0IiwidHlwIjoiUEFUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiJodHRwczovL2F1dGguY2FsZW5kbHkuY29tIiwiaWF0IjoxNzc4NDY2NjI3LCJqdGkiOiJlMjAzNDljMi0xZjRhLTRjMmMtYjBmMS0yYTc1YTM4OTg4ZjkiLCJ1c2VyX3V1aWQiOiJjODExODkxMS02YTA2LTRmM2YtOGE4Yy0zZDNjMzk3MDEyZjYiLCJzY29wZSI6ImF2YWlsYWJpbGl0eTpyZWFkIGF2YWlsYWJpbGl0eTp3cml0ZSBldmVudF90eXBlczpyZWFkIGV2ZW50X3R5cGVzOndyaXRlIGxvY2F0aW9uczpyZWFkIHJvdXRpbmdfZm9ybXM6cmVhZCBzaGFyZXM6d3JpdGUgc2NoZWR1bGVkX2V2ZW50czpyZWFkIHNjaGVkdWxlZF9ldmVudHM6d3JpdGUgc2NoZWR1bGluZ19saW5rczp3cml0ZSBncm91cHM6cmVhZCBvcmdhbml6YXRpb25zOnJlYWQgb3JnYW5pemF0aW9uczp3cml0ZSB1c2VyczpyZWFkIGFjdGl2aXR5X2xvZzpyZWFkIGRhdGFfY29tcGxpYW5jZTp3cml0ZSBvdXRnb2luZ19jb21tdW5pY2F0aW9uczpyZWFkIHdlYmhvb2tzOnJlYWQgd2ViaG9va3M6d3JpdGUifQ.kVaR5Q_2UvRfDnBj5d7eJaThQncdZwq9SD7c_IFTMv3vGOvHwXZtqBloEENEru9eGjuvyioUF_tySQId3WtbDw"
+# ─── Configuration ───────────────────────────────────────────────────────────
 
-HEADERS = {
-    "Authorization": f"Bearer {CALENDLY_TOKEN}",
-    "Content-Type": "application/json",
+CLOSE_API_KEY = os.environ.get("CLOSE_API_KEY", "")
+CLOSE_API_BASE = "https://api.close.com/api/v1"
+PACIFIC = ZoneInfo("America/Los_Angeles")
+
+CAPACITY_OLD = {0: 57, 1: 60, 2: 60, 3: 60, 4: 60, 5: 4, 6: 0}
+CAPACITY_NEW = {0: 42, 1: 42, 2: 42, 3: 42, 4: 42, 5: 0, 6: 0}
+CAPACITY_CUTOVER = date(2026, 5, 1)  # New capacity starts on this date
+
+def get_capacity(d):
+    """Return static capacity for a given date (fallback when Calendly data unavailable)."""
+    if d >= CAPACITY_CUTOVER:
+        return CAPACITY_NEW[d.weekday()]
+    return CAPACITY_OLD[d.weekday()]
+
+# ─── Calendly Integration ────────────────────────────────────────────────────
+
+CALENDLY_API_KEY = os.environ.get("CALENDLY_API_KEY", "")
+CALENDLY_API_BASE = "https://api.calendly.com"
+CAPACITY_CACHE_FILE = "capacity_cache.json"
+
+# Lane 1 rep Calendly event type URIs (from test v4)
+# These are the "New Vendingpreneur Strategy Call" calendars per rep
+LANE_1_CALENDLY_URIS = {
+    "https://api.calendly.com/event_types/d0362c50-1e8b-4230-952b-225fb339b4b9": "Scott Seymour",
+    "https://api.calendly.com/event_types/d21a1a7d-640b-41b8-9a27-b17c6bd3a446": "Eric Piccione",
+    "https://api.calendly.com/event_types/d79d10d6-7ef7-4aa7-b845-953ea719da97": "Christian Hartwell",
+    "https://api.calendly.com/event_types/f1748c62-210b-40e3-bdb0-cb1dbecfa258": "Robin Perkins",
+    "https://api.calendly.com/event_types/b107544d-2567-4db1-a47d-43c0c766ccad": "Chris Wanke",
+    "https://api.calendly.com/event_types/1977d6c2-e5ee-4721-8f33-bf802465c171": "Jake Skinner",
 }
 
-# The two Calendly event type URLs we need to track
-TARGET_SLUGS = {
-    "cxv9-jg6-m53": "Vending Accelerator Call",
-    "cxfn-hh2-h8g": "Vendingpreneurs Consultation",
-}
 
-def api_get(url, params=None):
+def calendly_get(endpoint, params=None):
     """Make a GET request to the Calendly API."""
-    resp = requests.get(url, headers=HEADERS, params=params)
+    url = endpoint if endpoint.startswith("http") else f"{CALENDLY_API_BASE}{endpoint}"
+    resp = requests.get(url, headers={
+        "Authorization": f"Bearer {CALENDLY_API_KEY}",
+        "Content-Type": "application/json",
+    }, params=params, timeout=15)
     resp.raise_for_status()
     return resp.json()
 
 
-def main():
-    print("=" * 60)
-    print("CALENDLY API TEST")
-    print("=" * 60)
+def fetch_calendly_available_slots(dates):
+    """Fetch available time slots from Calendly for each Lane 1 rep per day.
+    Returns: {date_obj: {"available": int, "per_rep": {rep_name: int}}}
+    Only returns data for days within the Calendly scheduling window.
+    """
+    if not CALENDLY_API_KEY:
+        log("   ⚠ CALENDLY_API_KEY not set — skipping Calendly capacity")
+        return {}
 
-    # Step 1: Get current user info
-    print("\n📋 Step 1: Verify authentication...")
-    user_data = api_get("https://api.calendly.com/users/me")
-    user_uri = user_data["resource"]["uri"]
-    org_uri = user_data["resource"]["current_organization"]
-    print(f"   ✅ Authenticated as: {user_data['resource']['name']}")
-    print(f"   User URI: {user_uri}")
-    print(f"   Org URI: {org_uri}")
+    log("📅 Fetching Calendly available slots...")
+    result = {}
 
-    # Step 2: List event types to find our two target calendars
-    print("\n📋 Step 2: Finding event type UUIDs...")
-    et_data = api_get("https://api.calendly.com/event_types", {
-        "organization": org_uri,
-        "active": "true",
-        "count": 100,
-    })
+    for d in dates:
+        start = f"{d.isoformat()}T00:00:00Z"
+        end = f"{d.isoformat()}T23:59:59Z"
+        day_available = 0
+        per_rep = {}
 
-    found_types = {}
-    for et in et_data.get("collection", []):
-        slug = et.get("scheduling_url", "").split("/")[-1] if "/d/" not in et.get("scheduling_url", "") else ""
-        # Check both regular and /d/ style URLs
-        url = et.get("scheduling_url", "")
-        for target_slug, target_name in TARGET_SLUGS.items():
-            if target_slug in url:
-                found_types[target_name] = {
-                    "uri": et["uri"],
-                    "name": et["name"],
-                    "slug": target_slug,
-                    "url": url,
-                    "duration": et.get("duration"),
-                    "kind": et.get("kind"),
-                    "pooling_type": et.get("pooling_type"),
-                    "type": et.get("type"),
-                }
-                print(f"   ✅ Found: {et['name']}")
-                print(f"      URI: {et['uri']}")
-                print(f"      Duration: {et.get('duration')} min")
-                print(f"      Kind: {et.get('kind')} | Pooling: {et.get('pooling_type')}")
-
-    if len(found_types) < 2:
-        print(f"\n   ⚠️ Only found {len(found_types)} of 2 target event types!")
-        print("   All event types in org:")
-        for et in et_data.get("collection", []):
-            print(f"     - {et['name']} → {et.get('scheduling_url')}")
-
-    # Step 3: Query available times for today and next 3 days
-    print("\n📋 Step 3: Querying available time slots...")
-    today = datetime.utcnow().date()
-
-    for day_offset in range(4):  # Today + 3 forward days
-        check_date = today + timedelta(days=day_offset)
-        start = f"{check_date}T00:00:00Z"
-        end = f"{check_date}T23:59:59Z"
-        day_label = "TODAY" if day_offset == 0 else check_date.strftime("%a %m/%d")
-
-        total_available = 0
-        total_booked = 0
-
-        for name, info in found_types.items():
+        for uri, rep_name in LANE_1_CALENDLY_URIS.items():
             try:
-                # Available slots
-                avail = api_get("https://api.calendly.com/event_type_available_times", {
-                    "event_type": info["uri"],
-                    "start_time": start,
-                    "end_time": end,
-                })
-                available_count = len(avail.get("collection", []))
-                total_available += available_count
+                data = calendly_get(
+                    f"{CALENDLY_API_BASE}/event_type_available_times",
+                    {"event_type": uri, "start_time": start, "end_time": end}
+                )
+                count = len(data.get("collection", []))
             except Exception as e:
-                available_count = f"ERROR: {e}"
+                count = 0
 
-            try:
-                # Scheduled (booked) events
-                sched = api_get("https://api.calendly.com/scheduled_events", {
-                    "organization": org_uri,
-                    "event_type": info["uri"],
-                    "min_start_time": start,
-                    "max_start_time": end,
-                    "status": "active",
-                    "count": 100,
-                })
-                booked_count = len(sched.get("collection", []))
-                total_booked += booked_count
-            except Exception as e:
-                booked_count = f"ERROR: {e}"
+            per_rep[rep_name] = count
+            day_available += count
 
-            print(f"   {day_label} | {name}: {available_count} available, {booked_count} booked")
+        # Only store if we got any data (skip days outside scheduling window)
+        if day_available > 0:
+            result[d] = {"available": day_available, "per_rep": per_rep}
+            log(f"   {d.strftime('%a %m/%d')}: {day_available} available slots")
 
-        total_capacity = total_available + total_booked
-        print(f"   {day_label} | TOTAL: {total_available} available + {total_booked} booked = {total_capacity} capacity")
-        print()
+    if not result:
+        log("   ⚠ No available slots found (may be outside scheduling window)")
 
-    # Step 4: Show raw available times for today (first event type) for debugging
-    if found_types:
-        print("\n📋 Step 4: Raw available time slots for today (first event type)...")
-        first_type = list(found_types.values())[0]
-        start = f"{today}T00:00:00Z"
-        end = f"{today}T23:59:59Z"
+    return result
+
+
+def load_capacity_cache():
+    """Load cached capacity data from JSON file."""
+    try:
+        with open(CAPACITY_CACHE_FILE, "r") as f:
+            raw = json.load(f)
+        # Convert string keys to date objects
+        return {date.fromisoformat(k): v for k, v in raw.items()}
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def save_capacity_cache(cache):
+    """Save capacity cache to JSON file."""
+    # Convert date keys to strings, keep only last 30 days
+    cutoff = date.today() - timedelta(days=30)
+    trimmed = {k.isoformat(): v for k, v in cache.items() if k >= cutoff}
+    with open(CAPACITY_CACHE_FILE, "w") as f:
+        json.dump(trimmed, f, indent=2)
+    log(f"   💾 Capacity cache saved ({len(trimmed)} days)")
+
+EXCLUDED_USER_IDS = {
+    "user_EmhqCmaHERTfgfWnPADiLGEqQw3ENvRYd3u1VEmblIp",
+    "user_4sfuKGMbv0LQZ4hpS8ipASv406kKTSNP5Xx79jOwSqM",
+    "user_5cZRqXu8kb4O1IeBVA98UMcMEhYZUhx1fnCHfSL0YMV",
+    "user_yRF070m26JE67J6CJqzkAB3IqY7btNm1K5RisCglKa6",
+}
+
+# Setter/discovery users — excluded from main count but tracked for LTF detail
+SETTER_USER_IDS = {
+    "user_EmhqCmaHERTfgfWnPADiLGEqQw3ENvRYd3u1VEmblIp",  # Kristin Nelson
+    "user_4sfuKGMbv0LQZ4hpS8ipASv406kKTSNP5Xx79jOwSqM",  # Spencer Reynolds
+}
+
+# Non-sales users — truly excluded from everything (no setter tracking either)
+HARD_EXCLUDED_USER_IDS = {
+    "user_5cZRqXu8kb4O1IeBVA98UMcMEhYZUhx1fnCHfSL0YMV",  # Stephen Olivas
+    "user_yRF070m26JE67J6CJqzkAB3IqY7btNm1K5RisCglKa6",  # Ahmad Bukhari
+}
+
+FIELD_FUNNEL_NAME_DEAL = "custom.cf_xqDQE8fkPsWa0RNEve7hcaxKblCe6489XeZGRDzyPdX"
+FIELD_FIRST_SALES_CALL = "custom.cf_LFdYEQ6bsgp49YjZzefypDmdVx8iwuakWDSLPLpVrBq"
+FIELD_LEAD_OWNER       = "custom.cf_gOfS9pFwext58oberEegLyix8hZzeHrxhCZOVh3P3rd"
+LEAD_FIELDS = ",".join(["id", "display_name", "name", "status_id", FIELD_FUNNEL_NAME_DEAL])
+
+# Lane 1 reps — Christian Hartwell is Lane 1 Lead
+LANE_1_REPS = {
+    "user_7F059xEinVentOEvkRMP77fWZyvwUiTRTUOuhD11J0e",  # Robin Perkins
+    "user_wF5aATmDljO6g6AHqehRPVmfCmH5j9VszbO6Q6Pjzm4",  # Eric Piccione
+    "user_F0VeLnOQlWpkDncNW8rBl1V2QJ08fnDt6DcUjNATUJK",  # Scott Seymour
+    "user_pKEujUcHJfsEyI5lM6L56aXM2s5nNOU994JRjRSlAdA",  # Chris Wanke
+    "user_fYWHvOuCKDuaQxSp6lROlv2rmvZZYq1kzjGvaF7OrAL",  # Jake Skinner
+    "user_wHm1vcLde4RExd3vv9UOjnms5Oz8ssXg8600mQuxMPb",  # Christian Hartwell (Lead)
+}
+LANE_1_REP_NAMES = {
+    "user_7F059xEinVentOEvkRMP77fWZyvwUiTRTUOuhD11J0e": "Robin Perkins",
+    "user_wF5aATmDljO6g6AHqehRPVmfCmH5j9VszbO6Q6Pjzm4": "Eric Piccione",
+    "user_F0VeLnOQlWpkDncNW8rBl1V2QJ08fnDt6DcUjNATUJK": "Scott Seymour",
+    "user_pKEujUcHJfsEyI5lM6L56aXM2s5nNOU994JRjRSlAdA": "Chris Wanke",
+    "user_fYWHvOuCKDuaQxSp6lROlv2rmvZZYq1kzjGvaF7OrAL": "Jake Skinner",
+    "user_wHm1vcLde4RExd3vv9UOjnms5Oz8ssXg8600mQuxMPb": "Christian Hartwell",
+}
+LANE_1_LEAD = "user_wHm1vcLde4RExd3vv9UOjnms5Oz8ssXg8600mQuxMPb"  # Christian Hartwell
+
+# Lane 2 reps — Jason Aaron is Lane 2 Lead
+LANE_2_REPS = {
+    "user_ulI4pdlkBQGJpFBjSfdf3U2deAXQATVPSAurnbL80T9",  # Bryan Barcus
+    "user_L0aaUNmM45X52HE7rj3VPWkxhahpoYobhDVAXamQMMD",  # Steven Starnes
+    "user_Bov31jjnHhENBy8uWNTTL8KKax8VX7o6DugLzBYOHBG",  # Lyle Hubbard
+    "user_WquWudQN7dghZsAPiNY80eJUmg1EadQg2UCQdvgbif7",  # Kelly Schrader
+    "user_I0cHZ04mBXXBvbFcnwmsc2KrcMsLsKxqjW8DtJ783Hr",  # Elvis Ellis
+    "user_5pAfnzGONQLUVLKqFQVpQ3570YV1gurVCTp1MMgfCDL",  # John Kirk
+    "user_UpJb11fzX2TuFHf7fFyWpfXr84lg2Ui7i7p5CtQkIaW",  # Cameron Caswell
+    "user_MrBLkl5wCqTm7QxHxPo2ydNV5KxMllg6YZDVc12Aqzj",  # Jason Aaron (Lead)
+}
+LANE_2_REP_NAMES = {
+    "user_ulI4pdlkBQGJpFBjSfdf3U2deAXQATVPSAurnbL80T9": "Bryan Barcus",
+    "user_L0aaUNmM45X52HE7rj3VPWkxhahpoYobhDVAXamQMMD": "Steven Starnes",
+    "user_Bov31jjnHhENBy8uWNTTL8KKax8VX7o6DugLzBYOHBG": "Lyle Hubbard",
+    "user_WquWudQN7dghZsAPiNY80eJUmg1EadQg2UCQdvgbif7": "Kelly Schrader",
+    "user_I0cHZ04mBXXBvbFcnwmsc2KrcMsLsKxqjW8DtJ783Hr": "Elvis Ellis",
+    "user_5pAfnzGONQLUVLKqFQVpQ3570YV1gurVCTp1MMgfCDL": "John Kirk",
+    "user_UpJb11fzX2TuFHf7fFyWpfXr84lg2Ui7i7p5CtQkIaW": "Cameron Caswell",
+    "user_MrBLkl5wCqTm7QxHxPo2ydNV5KxMllg6YZDVc12Aqzj": "Jason Aaron",
+}
+LANE_2_LEAD = "user_MrBLkl5wCqTm7QxHxPo2ydNV5KxMllg6YZDVc12Aqzj"  # Jason Aaron
+
+# Lead statuses excluded from capacity count (matches rep scorecard methodology)
+EXCLUDED_LEAD_STATUS_IDS = {
+    "stat_hWIGHjzyNpl4YjIFSFz3VK4fp2ny10SFJLKAihmo4KT",  # Canceled (by Lead)
+    "stat_YV4ZngDB4IGjLjlOf0YTFEWuKZJ6fhNxVkzQkvKYfdB",  # Outside the US
+}
+
+OUTPUT_FILE = os.environ.get("OUTPUT_FILE", "index.html")
+ARCHIVE_DIR = os.environ.get("ARCHIVE_DIR", "archive")
+API_THROTTLE = 0.5
+
+# ─── Funnel Configuration ───────────────────────────────────────────────────
+# Each entry: display_name, close_values (list), monthly_goal (None = no goal), section
+# close_values is a list of Close field values that map to this funnel row
+# "AK TikTok" and "Anthony IG" are separate rows (Tik Tok + Anthony IG in Close)
+
+FUNNEL_CONFIG = [
+    # ── External ──
+    {"name": "Low Ticket Funnel",       "close_values": ["Low Ticket Funnel"], "monthly_goal": 400, "section": "external"},
+    {"name": "LTF - Quiz Funnel",       "close_values": ["LTF - Quiz Funnel"], "monthly_goal": None, "section": "external"},
+    {"name": "Instagram",               "close_values": ["Instagram"],         "monthly_goal": 240, "section": "external"},
+    {"name": "YouTube",                 "close_values": ["YouTube - OG - Cam"],"monthly_goal": 132, "section": "inhouse"},
+    {"name": "X",                       "close_values": ["X"],                 "monthly_goal": 30,  "section": "external"},
+    {"name": "Linkedin",                "close_values": ["Linkedin"],          "monthly_goal": 30,  "section": "external"},
+    {"name": "Meta Ads",                "close_values": ["Meta Ads"],          "monthly_goal": 44,  "section": "inhouse"},
+    # ── In-House ──
+    {"name": "VSL",                     "close_values": ["VSL"],               "monthly_goal": 110, "section": "inhouse"},
+    {"name": "Website",                 "close_values": ["Website"],           "monthly_goal": 100, "section": "inhouse"},
+    {"name": "Internal Webinar",        "close_values": ["Internal Webinar"],  "monthly_goal": 70,  "section": "inhouse"},
+    {"name": "Mike Newsletter",           "close_values": ["Mike Newsletter"],   "monthly_goal": 10,  "section": "inhouse"},
+    {"name": "AK TikTok",                "close_values": ["Tik Tok"],           "monthly_goal": 22, "section": "inhouse"},
+    {"name": "Anthony IG",               "close_values": ["Anthony IG"],        "monthly_goal": 22, "section": "inhouse"},
+    {"name": "Side Hustle Nation/WWWS", "close_values": ["WWWS"],              "monthly_goal": 2,   "section": "inhouse"},
+    {"name": "Passivepreneurs",         "close_values": ["Passivepreneurs"],   "monthly_goal": None, "section": "inhouse"},
+    {"name": "Reactivation Email",      "close_values": ["Reactivation Email"],"monthly_goal": None, "section": "inhouse"},
+    {"name": "Reactivation Scrapers",   "close_values": ["Reactivation Scrapers"],"monthly_goal": None, "section": "inhouse"},
+    {"name": "LinkedIn Ads",            "close_values": ["LinkedIn Ads"],       "monthly_goal": None, "section": "inhouse"},
+    {"name": "YouTube Ads",             "close_values": ["YouTube Ads"],        "monthly_goal": None, "section": "inhouse"},
+    {"name": "Google Ads",              "close_values": ["Google Ads"],         "monthly_goal": None, "section": "inhouse"},
+]
+
+# Build reverse lookup: close_value → funnel display name
+CLOSE_VALUE_TO_FUNNEL = {}
+for fc in FUNNEL_CONFIG:
+    for cv in fc["close_values"]:
+        CLOSE_VALUE_TO_FUNNEL[cv] = fc["name"]
+
+UNCATEGORIZED_FUNNELS = ["No Attribution", "Unknown (Needs Review)"]
+
+
+# ─── Working Days Calculation ────────────────────────────────────────────────
+
+def working_days_in_month(year, month):
+    """Count Mon-Fri days in a given month."""
+    num_days = calendar.monthrange(year, month)[1]
+    count = 0
+    for day in range(1, num_days + 1):
+        if date(year, month, day).weekday() < 5:
+            count += 1
+    return count
+
+
+def get_daily_goal(monthly_goal, year, month):
+    """Divide monthly goal by working days, round to nearest integer."""
+    if monthly_goal is None:
+        return None
+    wd = working_days_in_month(year, month)
+    if wd == 0:
+        return 0
+    return max(1, round(monthly_goal / wd))
+
+
+# ─── Title Classification ───────────────────────────────────────────────────
+
+EXCLUDE_FOLLOW_UP_RE = re.compile(
+    r"follow[\s\-]?up|fallow\s+up|\bf/?u\b|next\s+steps|rescheduled|reschedule",
+    re.IGNORECASE
+)
+INCLUDE_PATTERNS_RE = re.compile(
+    r"vending\s+strategy\s+call"
+    r"|vendingpren[eu]+rs?\s+consultation"
+    r"|vendingpren[eu]+rs?\s+strategy\s+call"
+    r"|new\s+vendingpreneur\s+strategy\s+call"
+    r"|post\s+masterclass\s+strategy\s+call",
+    re.IGNORECASE
+)
+INCLUDE_AMBIGUOUS_RE = re.compile(r"vending\s+consult", re.IGNORECASE)
+EXCLUDE_AMBIGUOUS_RE = re.compile(
+    r"\benrollment\b|silver\s+start\s+up|bronze\s+enrollment|questions\s+on\s+enrollment",
+    re.IGNORECASE
+)
+
+# Scraper "Next Steps" titles — these are legit sales calls booked via scraper outreach.
+# Calendly appends prospect/rep names (e.g. "...with Jimmy and jason aaron").
+# Must be checked BEFORE the follow-up/next-steps exclusion to avoid false exclusion.
+INCLUDE_SCRAPER_RE = re.compile(
+    r"vendingpren[eu]+rs?\s*-?\s*next\s+steps"
+    r"|vendingpreneur\s+next\s+steps",
+    re.IGNORECASE
+)
+
+def classify_meeting_title(title):
+    if not title:
+        return "exclude_other"
+    if title.strip().lower().startswith("canceled"):
+        return "exclude"
+    if "vending quick discovery" in title.lower():
+        return "exclude"
+    # Check scraper "Next Steps" titles BEFORE the follow-up exclusion
+    if INCLUDE_SCRAPER_RE.search(title.strip()):
+        return "include"
+    if EXCLUDE_FOLLOW_UP_RE.search(title):
+        return "exclude"
+    if "anthony" in title.lower() and "q&a" in title.lower():
+        return "exclude"
+    if EXCLUDE_AMBIGUOUS_RE.search(title):
+        return "exclude"
+    if INCLUDE_PATTERNS_RE.search(title):
+        return "include"
+    if INCLUDE_AMBIGUOUS_RE.search(title):
+        return "include"
+    return "exclude_other"
+
+
+# ─── API Helpers ─────────────────────────────────────────────────────────────
+
+def log(msg):
+    print(msg, flush=True)
+
+def elapsed_since(start):
+    return f"{time.time() - start:.1f}s"
+
+session = requests.Session()
+session.auth = (CLOSE_API_KEY, "")
+session.headers.update({"Content-Type": "application/json"})
+_api_call_count = 0
+
+def close_get(endpoint, params=None):
+    global _api_call_count
+    time.sleep(API_THROTTLE)
+    url = f"{CLOSE_API_BASE}/{endpoint}"
+    for attempt in range(5):
+        resp = session.get(url, params=params or {}, timeout=60)
+        _api_call_count += 1
+        if resp.status_code == 429:
+            wait = float(resp.headers.get("Retry-After", 5))
+            log(f"   ⏳ Rate limited (attempt {attempt+1}), waiting {wait}s...")
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        return resp.json()
+    resp.raise_for_status()
+
+def parse_meeting_date_pacific(meeting):
+    raw = meeting.get("starts_at") or meeting.get("activity_at") or meeting.get("date_start")
+    if not raw or not isinstance(raw, str):
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return dt.astimezone(PACIFIC).date()
+    except (ValueError, TypeError):
+        return None
+
+
+# ─── Data Pipeline ───────────────────────────────────────────────────────────
+
+def fetch_all_meetings():
+    step_start = time.time()
+    log("📥 Fetching all meetings from Close...")
+    all_meetings = []
+    skip = 0
+    while True:
+        data = close_get("activity/meeting", {"_skip": skip, "_limit": 100})
+        all_meetings.extend(data.get("data", []))
+        if len(all_meetings) % 1000 == 0:
+            log(f"   ... {len(all_meetings)} meetings fetched")
+        if not data.get("has_more", False):
+            break
+        skip += 100
+    log(f"   ✓ {len(all_meetings)} total meetings [{elapsed_since(step_start)}]")
+    return all_meetings
+
+
+
+def classify_meetings(all_meetings, start_date, end_date):
+    counts = {"include": 0, "exclude": 0, "exclude_other": 0, "user_excluded": 0, "out_of_range": 0, "status_excluded": 0}
+    included = []
+    exclude_other_titles = []
+    for m in all_meetings:
+        meeting_date = parse_meeting_date_pacific(m)
+        if not meeting_date or meeting_date < start_date or meeting_date >= end_date:
+            counts["out_of_range"] += 1
+            continue
+        # Meeting status check (canceled/declined from calendar)
+        meeting_status = (m.get("status") or "").lower().strip()
+        if meeting_status.startswith("canceled") or meeting_status.startswith("declined"):
+            counts["status_excluded"] += 1
+            continue
+        uid = m.get("user_id", "")
+        ulist = m.get("users", [])
+        if uid in EXCLUDED_USER_IDS or any(u in EXCLUDED_USER_IDS for u in (ulist or [])):
+            counts["user_excluded"] += 1
+            continue
+        title = m.get("title", "")
+        cls = classify_meeting_title(title)
+        counts[cls] += 1
+        if cls == "include":
+            m["_meeting_date"] = meeting_date
+            included.append(m)
+        elif cls == "exclude_other":
+            exclude_other_titles.append({"title": title, "date": meeting_date.isoformat()})
+    return included, exclude_other_titles, counts
+
+
+def classify_setter_meetings(all_meetings, start_date, end_date):
+    """
+    Capture meetings from setter users (Kristin/Spencer) for LTF detail.
+    These are excluded from the main count but tracked separately.
+    Same date/status/title-exclude filters, but only setter user meetings.
+    """
+    setter_included = []
+    for m in all_meetings:
+        meeting_date = parse_meeting_date_pacific(m)
+        if not meeting_date or meeting_date < start_date or meeting_date >= end_date:
+            continue
+        # Same status filter
+        meeting_status = (m.get("status") or "").lower().strip()
+        if meeting_status.startswith("canceled") or meeting_status.startswith("declined"):
+            continue
+        # Only setter users
+        uid = m.get("user_id", "")
+        ulist = m.get("users", [])
+        is_setter = uid in SETTER_USER_IDS or any(u in SETTER_USER_IDS for u in (ulist or []))
+        if not is_setter:
+            continue
+        # Skip hard-excluded users (shouldn't overlap, but safety)
+        if uid in HARD_EXCLUDED_USER_IDS or any(u in HARD_EXCLUDED_USER_IDS for u in (ulist or [])):
+            continue
+        # Title-level excludes (follow-ups, rescheduled, canceled prefix, enrollment)
+        title = m.get("title", "")
+        if title.strip().lower().startswith("canceled"):
+            continue
+        if EXCLUDE_FOLLOW_UP_RE.search(title):
+            continue
+        if EXCLUDE_AMBIGUOUS_RE.search(title):
+            continue
+        # Everything else from setters counts (discovery calls, consults, etc.)
+        m["_meeting_date"] = meeting_date
+        setter_included.append(m)
+    return setter_included
+
+
+def fetch_leads_for_meetings(meetings):
+    step_start = time.time()
+    unique_ids = list(set(m["lead_id"] for m in meetings if m.get("lead_id")))
+    log(f"📥 Fetching {len(unique_ids)} leads...")
+    cache = {}
+    for i, lid in enumerate(unique_ids, 1):
+        if i % 20 == 0 or i == len(unique_ids):
+            log(f"   ... {i}/{len(unique_ids)} leads ({_api_call_count} API calls)")
         try:
-            avail = api_get("https://api.calendly.com/event_type_available_times", {
-                "event_type": first_type["uri"],
-                "start_time": start,
-                "end_time": end,
-            })
-            for slot in avail.get("collection", []):
-                st = slot.get("start_time", "")
-                et_time = slot.get("end_time", "")
-                remaining = slot.get("invitees_remaining", "?")
-                print(f"   {st} → {et_time} (invitees_remaining: {remaining})")
-            print(f"   Total: {len(avail.get('collection', []))} slots")
-        except Exception as e:
-            print(f"   ERROR: {e}")
+            cache[lid] = close_get(f"lead/{lid}", {"_fields": LEAD_FIELDS})
+        except requests.HTTPError as e:
+            log(f"  ⚠ Could not fetch lead {lid}: {e}")
+            cache[lid] = None
+    log(f"   ✓ Leads fetched [{elapsed_since(step_start)}]")
+    return cache
 
-    print("\n" + "=" * 60)
-    print("TEST COMPLETE — copy the output above and share it back")
-    print("=" * 60)
+
+def fetch_field_leads(start_date, end_date):
+    """Fetch leads where First Sales Call Booked Date is within [start_date, end_date).
+    Uses Close API lead search with custom field date filter.
+    Returns list of lead dicts with id, display_name, status_id, funnel, and field date.
+    """
+    step_start = time.time()
+    query = (
+        f'{FIELD_FIRST_SALES_CALL} >= "{start_date.isoformat()}" '
+        f'and {FIELD_FIRST_SALES_CALL} < "{end_date.isoformat()}"'
+    )
+    fields = ",".join(["id", "display_name", "status_id", FIELD_FIRST_SALES_CALL, FIELD_FUNNEL_NAME_DEAL, FIELD_LEAD_OWNER])
+    leads = []
+    skip = 0
+    log(f"📥 Fetching leads by First Sales Call Booked Date ({start_date} to {end_date})...")
+    while True:
+        data = close_get("lead", {"query": query, "_fields": fields, "_skip": skip, "_limit": 200})
+        batch = data.get("data", [])
+        leads.extend(batch)
+        if len(leads) % 100 == 0 and len(leads) > 0:
+            log(f"   ... {len(leads)} leads fetched")
+        if not data.get("has_more", False):
+            break
+        skip += 200
+    log(f"   ✓ {len(leads)} leads found [{elapsed_since(step_start)}]")
+    return leads
+
+
+def map_funnel(raw_funnel):
+    """Map a raw Close funnel value to the display funnel name."""
+    if not raw_funnel or raw_funnel.strip() == "":
+        return "Unknown (Needs Review)"
+    if raw_funnel in CLOSE_VALUE_TO_FUNNEL:
+        return CLOSE_VALUE_TO_FUNNEL[raw_funnel]
+    # Check if it's already a known uncategorized
+    if raw_funnel in UNCATEGORIZED_FUNNELS:
+        return raw_funnel
+    # Unknown value → uncategorized
+    return raw_funnel
+
+
+def build_dashboard_data(field_leads, dates, today=None, lane_reps=None, lane_label=""):
+    """Build dashboard data from field-based lead query.
+    field_leads: list of lead dicts from fetch_field_leads (or similar).
+    lane_reps: set of user IDs to filter by (if None, no lane filter applied).
+    lane_label: label for logging (e.g., "Lane 1", "Lane 2").
+    """
+    daily_data = {}
+    all_funnels_seen = set()
+    for d in dates:
+        daily_data[d] = {"booked": 0, "capacity": get_capacity(d), "funnels": {}}
+
+    # Per-rep tracking: { user_id: { date: { funnel: count } } }
+    rep_data = {}
+    if lane_reps:
+        for uid in lane_reps:
+            rep_data[uid] = {d: {} for d in dates}
+
+    valid_meetings = []
+    status_excluded = 0
+    lane_excluded = 0
+
+    for lead in field_leads:
+        # Exclude bad statuses
+        if lead.get("status_id") in EXCLUDED_LEAD_STATUS_IDS:
+            status_excluded += 1
+            continue
+
+        # Lane filter — only count leads owned by reps in this lane
+        lead_owner = (lead.get(FIELD_LEAD_OWNER) or "").strip()
+        if lane_reps and lead_owner not in lane_reps:
+            lane_excluded += 1
+            continue
+
+        # Get the date from the field
+        field_date_str = lead.get(FIELD_FIRST_SALES_CALL)
+        if not field_date_str:
+            continue
+        try:
+            field_date = date.fromisoformat(field_date_str)
+        except (ValueError, TypeError):
+            continue
+
+        if field_date not in daily_data:
+            continue
+
+        # Get funnel
+        raw_funnel = (lead.get(FIELD_FUNNEL_NAME_DEAL) or "")
+        funnel = map_funnel(raw_funnel)
+
+        daily_data[field_date]["booked"] += 1
+        all_funnels_seen.add(funnel)
+        daily_data[field_date]["funnels"][funnel] = daily_data[field_date]["funnels"].get(funnel, 0) + 1
+
+        # Track per-rep
+        if lane_reps and lead_owner in rep_data:
+            rep_data[lead_owner][field_date][funnel] = rep_data[lead_owner][field_date].get(funnel, 0) + 1
+
+        valid_meetings.append({
+            "date": field_date,
+            "title": lead.get("display_name", ""),
+            "funnel": funnel,
+            "lead_id": lead.get("id", ""),
+            "lead_owner": lead_owner,
+        })
+
+    if status_excluded > 0:
+        log(f"   ⚠ Excluded {status_excluded} leads (status: Canceled/Outside US)")
+    if lane_excluded > 0:
+        log(f"   ⚠ Excluded {lane_excluded} leads (Lead Owner not in {lane_label})")
+    log(f"   📊 {len(valid_meetings)} {lane_label} leads counted across window")
+
+    return {
+        "dates": dates,
+        "daily_data": daily_data,
+        "all_funnels_seen": all_funnels_seen,
+        "valid_meetings": valid_meetings,
+        "today": today,
+        "rep_data": rep_data,
+    }
+
+
+def build_funnel_detail(closer_data, setter_meetings, lead_cache, dates, close_values, label, track_no_funnel=False):
+    """
+    Build closer vs setter breakdown per day for one or more funnels.
+    close_values: a single Close field value OR a list of values
+                  (e.g., "Low Ticket Funnel" or ["Instagram", "X", "Linkedin"])
+    label: display label for logging (e.g., "LTF", "Instagram")
+    track_no_funnel: if True, also count setter calls with no funnel assigned
+    """
+    if isinstance(close_values, str):
+        close_values = [close_values]
+
+    daily = {}
+    for d in dates:
+        closer_count = sum(
+            closer_data["daily_data"][d]["funnels"].get(map_funnel(cv), 0)
+            for cv in close_values
+        )
+        daily[d] = {"closer": closer_count, "setter": 0, "total": closer_count, "no_funnel": 0}
+
+    # Cross-window dedup for setter meetings — most recent wins
+    lead_best = {}
+    for m in setter_meetings:
+        lead_id = m.get("lead_id")
+        if not lead_id:
+            continue
+        meeting_date = m.get("_meeting_date")
+        if not meeting_date or meeting_date not in daily:
+            continue
+        lead_data = lead_cache.get(lead_id)
+        if lead_data and lead_data.get("status_id") in EXCLUDED_LEAD_STATUS_IDS:
+            continue
+        if lead_id not in lead_best or meeting_date > lead_best[lead_id]["_meeting_date"]:
+            lead_best[lead_id] = m
+
+    setter_count_total = 0
+    no_funnel_total = 0
+    for lead_id, m in lead_best.items():
+        meeting_date = m["_meeting_date"]
+        lead_data = lead_cache.get(lead_id)
+        raw_funnel = (lead_data.get(FIELD_FUNNEL_NAME_DEAL) if lead_data else None) or ""
+        raw_funnel = raw_funnel.strip()
+
+        if not raw_funnel and track_no_funnel:
+            daily[meeting_date]["no_funnel"] += 1
+            no_funnel_total += 1
+        elif raw_funnel in close_values:
+            daily[meeting_date]["setter"] += 1
+            daily[meeting_date]["total"] += 1
+            setter_count_total += 1
+
+    nf_str = f", {no_funnel_total} no-funnel discovery calls" if track_no_funnel else ""
+    log(f"   📊 {label} Detail: {setter_count_total} setter calls{nf_str}")
+    return daily
+
+
+# ─── Shared CSS ──────────────────────────────────────────────────────────────
+
+COMMON_CSS = """
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: 'Inter', -apple-system, system-ui, sans-serif; background: #ffffff; color: #1a1a1a; }
+.header { background: #1b2e1b; color: #fff; padding: 0.8rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+.header h1 { font-size: 1.15rem; font-weight: 700; }
+.header .sub { font-size: 0.68rem; color: #a3c4a3; margin-top: 2px; }
+.header .right { text-align: right; font-family: 'JetBrains Mono', monospace; }
+.header .right .date { font-size: 0.78rem; font-weight: 600; }
+.header .right .time { font-size: 0.65rem; color: #a3c4a3; }
+.dot { display: inline-block; width: 7px; height: 7px; background: #4ade80; border-radius: 50%; margin-right: 5px; }
+.wrap { padding: 1rem 1.5rem 2rem; max-width: 1500px; margin: 0 auto; }
+.sec { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #1b5e1b; padding: 0.55rem 0.6rem 0.3rem; border-left: 3px solid #1b5e1b; background: #f8faf8; }
+.card { border: 1px solid #d4d4d4; border-radius: 4px; overflow-x: auto; margin-bottom: 1rem; background: #fff; }
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+th { padding: 0.5rem 0.6rem; font-size: 0.68rem; font-weight: 700; text-align: center; color: #555; border-bottom: 2px solid #d4d4d4; white-space: nowrap; background: #fafafa; line-height: 1.4; }
+th:first-child { text-align: left; padding-left: 0.6rem; }
+td { padding: 0.35rem 0.6rem; border-bottom: 1px solid #ececec; font-size: 0.78rem; }
+td.num { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; font-weight: 500; color: #333; }
+td.label { font-weight: 500; font-size: 0.76rem; padding-left: 0.6rem; color: #1a1a1a; }
+.metric { font-weight: 600; font-size: 0.78rem; padding-left: 0.6rem; color: #1a1a1a; }
+th.col-date.today { background: #fdf3e0 !important; color: #b45309; }
+td.today { background: #fdf8ee !important; }
+th.col-date.past { background: #f5f5f5 !important; color: #999; }
+td.past { background: #fafafa !important; }
+.booked { color: #1b7a2e; font-weight: 700; }
+.zero { color: #ccc; font-weight: 400; }
+.has-count { color: #1b7a2e; font-weight: 700; }
+.total-num { font-weight: 700; color: #1a1a1a; }
+.util-low { color: #16a34a; font-weight: 700; }
+.util-mid { color: #b45309; font-weight: 700; }
+.util-high { color: #dc2626; font-weight: 700; }
+tr.total-row td { border-top: 2px solid #bbb; }
+tr.section-divider td { border-top: 2px solid #d4d4d4; padding: 0; height: 0; }
+tr.section-label-row td { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; padding: 0.5rem 0.6rem 0.25rem; border-bottom: 1px solid #d4d4d4; }
+tr.section-label-row.sec-ext td { color: #1b5e1b; background: #f8faf8; border-top: none; }
+tr.section-label-row.sec-inh td { color: #5e4b1b; background: #fdf8f0; border-top: 2px solid #d4d4d4; }
+tr.section-label-row.sec-unc td { color: #666; background: #f5f5f5; border-top: 2px solid #d4d4d4; }
+.footer { margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid #e0e0e0; font-size: 0.72rem; color: #888; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+.footer a { color: #1b7a2e; text-decoration: none; font-weight: 600; }
+.footer a:hover { text-decoration: underline; }
+.excluded-section { margin-top: 0.5rem; }
+.excluded-section summary { font-size: 0.72rem; font-weight: 600; color: #666; cursor: pointer; padding: 0.4rem 0; }
+.excluded-section .exc-table { margin-top: 0.3rem; }
+.excluded-section .exc-table td { font-size: 0.7rem; color: #666; padding: 0.2rem 0.6rem; }
+.summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.25rem; }
+.s-card { background: #f8faf8; border: 1px solid #d4d4d4; border-radius: 6px; padding: 1rem; }
+.s-card .s-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #666; margin-bottom: 0.3rem; }
+.s-card .s-value { font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 700; }
+.s-card .s-value.green { color: #1b7a2e; }
+.sec-ltf { color: #1b3a5e; border-left-color: #2563eb; background: #f0f4ff; }
+tr.section-label-row.sec-ltf td { color: #1b3a5e; background: #f0f4ff; border-top: 2px solid #d4d4d4; }
+.ltf-closer { color: #1b7a2e; font-weight: 600; }
+.ltf-setter { color: #2563eb; font-weight: 600; }
+.ltf-total { color: #1a1a1a; font-weight: 700; }
+.ltf-pct { color: #666; font-weight: 500; font-size: 0.7rem; }
+.ltf-collapsible { margin-bottom: 1rem; }
+.ltf-collapsible summary { font-size: 0.72rem; font-weight: 600; color: #1b3a5e; cursor: pointer; padding: 0.5rem 0.6rem; background: #f0f4ff; border: 1px solid #d4d4d4; border-radius: 4px; }
+.ltf-collapsible summary:hover { background: #e4eaff; }
+.ltf-collapsible details[open] summary { border-radius: 4px 4px 0 0; border-bottom: none; }
+.ltf-collapsible details[open] .card { margin-top: 0 !important; border-top: none; border-radius: 0 0 4px 4px; }
+@media (max-width: 900px) { .header { padding: 0.6rem 0.75rem; } .wrap { padding: 0.5rem 0.75rem; } .summary-cards { grid-template-columns: 1fr; } }
+"""
+
+
+def html_header_bar(title, subtitle, date_str, time_str):
+    return f"""<div class="header">
+  <div><h1>📞 {title}</h1><div class="sub">{subtitle}</div></div>
+  <div class="right"><div class="date"><span class="dot"></span>{date_str}</div><div class="time">{time_str}</div></div>
+</div>"""
+
+
+def util_class(pct):
+    if pct >= 80: return "util-high"
+    if pct >= 40: return "util-mid"
+    return "util-low"
+
+
+# ─── Funnel Row Builder ─────────────────────────────────────────────────────
+
+def build_funnel_rows(data, dates, today, daily_goal_map, section_filter):
+    """Build HTML rows for funnels in a given section. Only shows funnels with ≥1 call."""
+    daily = data["daily_data"]
+    rows = ""
+
+    # Get configured funnels for this section
+    section_funnels = [fc for fc in FUNNEL_CONFIG if fc["section"] == section_filter]
+
+    for fc in section_funnels:
+        fname = fc["name"]
+        dg = daily_goal_map.get(fname)
+
+        # Dynamic: check if this funnel has any calls in the window
+        has_any = False
+        for d in dates:
+            for cv in fc["close_values"]:
+                mapped_name = CLOSE_VALUE_TO_FUNNEL.get(cv, cv)
+                if daily[d]["funnels"].get(mapped_name, 0) > 0:
+                    has_any = True
+                    break
+            if has_any:
+                break
+        if not has_any:
+            continue
+
+        cells = ""
+        for d in dates:
+            count = 0
+            for cv in fc["close_values"]:
+                mapped_name = CLOSE_VALUE_TO_FUNNEL.get(cv, cv)
+                count += daily[d]["funnels"].get(mapped_name, 0)
+
+            tc = " today" if d == today else (" past" if today and d < today else "")
+
+            if dg is not None:
+                if count > 0:
+                    cells += f'<td class="num has-count{tc}">{count}/{dg}</td>'
+                else:
+                    cells += f'<td class="num zero{tc}">0/{dg}</td>'
+            else:
+                if count > 0:
+                    cells += f'<td class="num has-count{tc}">{count}</td>'
+                else:
+                    cells += f'<td class="num zero{tc}">0</td>'
+
+        rows += f'<tr><td class="label">{fname}</td>{cells}</tr>\n'
+
+    return rows
+
+
+def build_uncategorized_rows(data, dates, today):
+    """Build rows for No Attribution, Unknown, and any unmapped funnels. Only shows rows with ≥1 call."""
+    daily = data["daily_data"]
+    all_seen = data.get("all_funnels_seen", set())
+
+    configured_names = set(fc["name"] for fc in FUNNEL_CONFIG)
+    unmapped = set()
+    for f in all_seen:
+        if f not in configured_names and f not in UNCATEGORIZED_FUNNELS:
+            unmapped.add(f)
+
+    uncat_list = UNCATEGORIZED_FUNNELS + sorted(unmapped)
+
+    rows = ""
+    for fname in uncat_list:
+        # Dynamic: skip if no calls in window
+        has_any = any(daily[d]["funnels"].get(fname, 0) > 0 for d in dates)
+        if not has_any:
+            continue
+
+        cells = ""
+        for d in dates:
+            count = daily[d]["funnels"].get(fname, 0)
+            tc = " today" if d == today else (" past" if today and d < today else "")
+            if count > 0:
+                cells += f'<td class="num has-count{tc}">{count}</td>'
+            else:
+                cells += f'<td class="num zero{tc}">0</td>'
+        rows += f'<tr><td class="label">{fname}</td>{cells}</tr>\n'
+
+    return rows
+
+
+# ─── Rolling Dashboard HTML ─────────────────────────────────────────────────
+
+def generate_lane_content(data, dates, today, daily_goal_map, n_cols, lane_rep_names, lane_lead, show_capacity=True):
+    """Generate the inner HTML content for one lane (capacity + funnels + rep details)."""
+    daily = data["daily_data"]
+
+    def tc(d):
+        if d == today: return " today"
+        elif d < today: return " past"
+        return ""
+
+    # Capacity metrics
+    cap_r = booked_r = avail_r = util_r = ""
+    for d in dates:
+        c = daily[d]["capacity"]; b = daily[d]["booked"]; t = tc(d)
+        if show_capacity:
+            cap_r += f'<td class="num{t}">{c if c > 0 else "–"}</td>'
+            booked_r += f'<td class="num {"booked" if b > 0 else "zero"}{t}">{b}</td>'
+            avail_r += f'<td class="num{t}">{c - b if c > 0 else "–"}</td>'
+            if c > 0:
+                pct = b / c * 100
+                util_r += f'<td class="num {util_class(pct)}{t}">{pct:.2f}%</td>'
+            else:
+                util_r += f'<td class="num{t}">N/A</td>'
+        else:
+            cap_r += f'<td class="num{t}">–</td>'
+            booked_r += f'<td class="num {"booked" if b > 0 else "zero"}{t}">{b}</td>'
+            avail_r += f'<td class="num{t}">–</td>'
+            util_r += f'<td class="num{t}">N/A</td>'
+
+    # Funnel section rows (dynamic — only funnels with >=1 call)
+    ext_rows = build_funnel_rows(data, dates, today, daily_goal_map, "external")
+    inh_rows = build_funnel_rows(data, dates, today, daily_goal_map, "inhouse")
+    unc_rows = build_uncategorized_rows(data, dates, today)
+
+    # Total row
+    total_cells = ""
+    for d in dates:
+        t = tc(d)
+        total_cells += f'<td class="num total-num{t}">{daily[d]["booked"]}</td>'
+
+    # Date headers
+    date_headers = ""
+    for d in dates:
+        label = "► TODAY" if d == today else d.strftime("%a").upper()
+        ds = d.strftime("%m/%d")
+        date_headers += f'<th class="col-date{tc(d)}">{label}<br>{ds}</th>'
+
+    # Rep Details
+    rep_data = data.get("rep_data", {})
+    rep_rows = ""
+    rep_summary_parts = []
+
+    # Sort reps alphabetically, lead last
+    sorted_uids = sorted(lane_rep_names.keys(), key=lambda uid: (uid == lane_lead, lane_rep_names[uid]))
+
+    for uid in sorted_uids:
+        rep_name = lane_rep_names.get(uid, uid)
+        badge = ' <span style="background:#2563eb;color:#fff;font-size:0.6rem;padding:1px 6px;border-radius:3px;margin-left:4px;">Lead</span>' if uid == lane_lead else ""
+        day_data = rep_data.get(uid, {})
+
+        rep_funnels = set()
+        rep_total = 0
+        for d in dates:
+            for f, c in day_data.get(d, {}).items():
+                rep_funnels.add(f)
+                rep_total += c
+
+        if rep_total > 0:
+            rep_summary_parts.append(f"{rep_name.split()[0]}: {rep_total}")
+
+        header_cells = ""
+        for d in dates:
+            t = tc(d)
+            day_total = sum(day_data.get(d, {}).values())
+            header_cells += f'<td class="num ltf-total{t}">{day_total}</td>' if day_total > 0 else f'<td class="num zero{t}">0</td>'
+
+        sep = ' style="border-top:2px solid #e0e0e0;"' if rep_rows else ""
+        rep_rows += f'<tr{sep}><td class="metric" style="font-weight:700;padding-top:0.5rem;">{rep_name}{badge}</td>{header_cells}</tr>\n'
+
+        for funnel in sorted(rep_funnels):
+            funnel_cells = ""
+            for d in dates:
+                t = tc(d)
+                c = day_data.get(d, {}).get(funnel, 0)
+                funnel_cells += f'<td class="num{t}">{c}</td>' if c > 0 else f'<td class="num zero{t}">0</td>'
+            rep_rows += f'<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">{funnel}</td>{funnel_cells}</tr>\n'
+
+    rep_summary = "Rep Details — " + " · ".join(rep_summary_parts) if rep_summary_parts else "Rep Details — No calls"
+
+    # Build section HTML, only include sections with rows
+    funnel_html = ""
+    if ext_rows:
+        funnel_html += f"""
+    <div class="sec">FUNNEL BREAKDOWN — EXTERNAL</div>
+    <table><colgroup><col style="width:200px"><col span="{n_cols}"></colgroup>
+      <tbody>{ext_rows}</tbody>
+    </table>"""
+    if inh_rows:
+        funnel_html += f"""
+    <div class="sec">FUNNEL BREAKDOWN — IN-HOUSE</div>
+    <table><colgroup><col style="width:200px"><col span="{n_cols}"></colgroup>
+      <tbody>{inh_rows}</tbody>
+    </table>"""
+    if unc_rows:
+        funnel_html += f"""
+    <div class="sec">FUNNEL BREAKDOWN — UNCATEGORIZED</div>
+    <table><colgroup><col style="width:200px"><col span="{n_cols}"></colgroup>
+      <tbody>{unc_rows}</tbody>
+    </table>"""
+
+    return f"""
+  <div class="card">
+    <div class="sec">CAPACITY METRICS</div>
+    <table><colgroup><col style="width:200px"><col span="{n_cols}"></colgroup>
+      <thead><tr><th></th>{date_headers}</tr></thead>
+      <tbody>
+        <tr><td class="metric">Capacity</td>{cap_r}</tr>
+        <tr><td class="metric">Booked</td>{booked_r}</tr>
+        <tr><td class="metric">Available</td>{avail_r}</tr>
+        <tr><td class="metric">Utilization %</td>{util_r}</tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    {funnel_html}
+    <table><colgroup><col style="width:200px"><col span="{n_cols}"></colgroup>
+      <tbody>
+        <tr class="total-row"><td class="metric">TOTAL</td>{total_cells}</tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="ltf-collapsible">
+    <details>
+      <summary>{rep_summary}</summary>
+      <div class="card" style="margin-top:0.5rem;">
+        <table><colgroup><col style="width:200px"><col span="{n_cols}"></colgroup>
+          <tbody>
+            {rep_rows}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </div>"""
+
+
+def generate_rolling_html(lane1_data, lane2_data):
+    dates = lane1_data["dates"]
+    today = lane1_data["today"]
+
+    now_pacific = datetime.now(PACIFIC)
+    last_updated = now_pacific.strftime("%I:%M %p %Z")
+    last_updated_date = now_pacific.strftime("%A, %B %-d, %Y")
+
+    year, month = now_pacific.year, now_pacific.month
+    daily_goal_map = {}
+    for fc in FUNNEL_CONFIG:
+        dg = get_daily_goal(fc["monthly_goal"], year, month)
+        daily_goal_map[fc["name"]] = dg
+
+    n_cols = len(dates)
+    wd = working_days_in_month(year, month)
+
+    lane1_content = generate_lane_content(lane1_data, dates, today, daily_goal_map, n_cols, LANE_1_REP_NAMES, LANE_1_LEAD, show_capacity=True)
+    lane2_content = generate_lane_content(lane2_data, dates, today, daily_goal_map, n_cols, LANE_2_REP_NAMES, LANE_2_LEAD, show_capacity=False)
+
+    toggle_css = """
+    .lane-toggle { display:flex; gap:8px; margin-bottom:1rem; }
+    .lane-btn { padding:10px 24px; font-size:0.95rem; font-weight:700; border:2px solid #1b7a2e;
+                border-radius:6px; cursor:pointer; transition:all 0.15s; background:#fff; color:#1b7a2e; }
+    .lane-btn.active { background:#1b7a2e; color:#fff; }
+    .lane-btn:hover:not(.active) { background:#f0faf0; }
+    """
+
+    toggle_js = """
+    <script>
+    function showLane(n) {
+      document.getElementById('lane1').style.display = n===1 ? 'block' : 'none';
+      document.getElementById('lane2').style.display = n===2 ? 'block' : 'none';
+      document.getElementById('btn1').className = 'lane-btn' + (n===1 ? ' active' : '');
+      document.getElementById('btn2').className = 'lane-btn' + (n===2 ? ' active' : '');
+    }
+    </script>
+    """
+
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Call Capacity Dashboard</title>
+<style>{COMMON_CSS}
+{toggle_css}
+</style>
+</head><body>
+{html_header_bar("Call Capacity Dashboard", f"4-Day Trailing + 10-Day Lookahead · First Meetings Only · {wd} working days in {now_pacific.strftime('%B')}", last_updated_date, "Last updated: " + last_updated)}
+<div class="wrap">
+
+  <div class="lane-toggle">
+    <button id="btn1" class="lane-btn active" onclick="showLane(1)">Lane 1</button>
+    <button id="btn2" class="lane-btn" onclick="showLane(2)">Lane 2</button>
+  </div>
+
+  <div id="lane1">
+  {lane1_content}
+  </div>
+
+  <div id="lane2" style="display:none;">
+  {lane2_content}
+  </div>
+
+  <div class="footer">
+    <span>Source: First Sales Call Booked Date field · <a href="archive.html">📁 Archive</a></span>
+    <a href="https://stephenolivas.github.io/mtd-funnel-dashboard/" target="_blank">📊 MTD Funnel Reporting →</a>
+  </div>
+</div>
+{toggle_js}
+</body></html>"""
+
+
+
+# ─── Weekly Summary HTML ─────────────────────────────────────────────────────
+
+def generate_weekly_html(data, week_start):
+    dates = data["dates"]; daily = data["daily_data"]
+    week_end = week_start + timedelta(days=6)
+    total_booked = sum(daily[d]["booked"] for d in dates)
+    total_cap = sum(daily[d]["capacity"] for d in dates)
+    avg_util = (total_booked / total_cap * 100) if total_cap > 0 else 0
+
+    date_headers = "".join(f'<th class="col-date">{d.strftime("%a").upper()}<br>{d.strftime("%m/%d")}</th>' for d in dates)
+    date_headers += '<th class="col-date" style="background:#f0f0f0;">TOTAL</th>'
+    n_cols = len(dates) + 1
+
+    cap_r = booked_r = avail_r = util_r = ""
+    tc_cap = tc_bk = 0
+    for d in dates:
+        c = daily[d]["capacity"]; b = daily[d]["booked"]; tc_cap += c; tc_bk += b
+        cap_r += f'<td class="num">{c if c > 0 else "–"}</td>'
+        booked_r += f'<td class="num {"booked" if b > 0 else "zero"}">{b}</td>'
+        avail_r += f'<td class="num">{c - b if c > 0 else "–"}</td>'
+        if c > 0:
+            pct = b / c * 100
+            util_r += f'<td class="num {util_class(pct)}">{pct:.1f}%</td>'
+        else:
+            util_r += f'<td class="num">N/A</td>'
+    ou = (tc_bk / tc_cap * 100) if tc_cap > 0 else 0
+    cap_r += f'<td class="num total-num">{tc_cap}</td>'
+    booked_r += f'<td class="num total-num booked">{tc_bk}</td>'
+    avail_r += f'<td class="num total-num">{tc_cap - tc_bk}</td>'
+    util_r += f'<td class="num total-num {util_class(ou)}">{ou:.1f}%</td>'
+
+    # Simple funnel totals for weekly
+    funnel_totals = {}
+    for m in data["valid_meetings"]:
+        f = m["funnel"]; funnel_totals[f] = funnel_totals.get(f, 0) + 1
+    funnel_rows = ""
+    for fn in sorted(funnel_totals.keys()):
+        cnt = funnel_totals[fn]
+        funnel_rows += f'<tr><td class="label">{fn}</td><td class="num {"booked" if cnt > 0 else "zero"}">{cnt}</td></tr>\n'
+    funnel_rows += f'<tr class="total-row"><td class="metric">TOTAL</td><td class="num total-num">{total_booked}</td></tr>\n'
+
+    title = f"Weekly Summary — {week_start.strftime('%b %-d')} to {week_end.strftime('%b %-d, %Y')}"
+    return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>{title}</title><style>{COMMON_CSS}</style></head><body>
+{html_header_bar(title, "Monday through Sunday · First Meetings Only", week_start.strftime("%B %-d, %Y"), "Generated: " + datetime.now(PACIFIC).strftime("%b %-d at %I:%M %p %Z"))}
+<div class="wrap">
+  <div class="summary-cards">
+    <div class="s-card"><div class="s-label">Total Booked</div><div class="s-value green">{total_booked}</div></div>
+    <div class="s-card"><div class="s-label">Total Capacity</div><div class="s-value">{total_cap}</div></div>
+    <div class="s-card"><div class="s-label">Avg Utilization</div><div class="s-value {util_class(avg_util)}">{avg_util:.1f}%</div></div>
+  </div>
+  <div class="card"><div class="sec">DAILY BREAKDOWN</div>
+    <table><colgroup><col style="width:200px"><col span="{n_cols}"></colgroup>
+    <thead><tr><th></th>{date_headers}</tr></thead>
+    <tbody><tr><td class="metric">Capacity</td>{cap_r}</tr><tr><td class="metric">Booked</td>{booked_r}</tr><tr><td class="metric">Available</td>{avail_r}</tr><tr><td class="metric">Utilization %</td>{util_r}</tr></tbody></table>
+  </div>
+  <div class="card"><div class="sec">FUNNEL TOTALS</div>
+    <table style="table-layout:auto; max-width:400px;"><thead><tr><th>Funnel</th><th>Total</th></tr></thead><tbody>{funnel_rows}</tbody></table>
+  </div>
+  <div class="footer"><a href="../archive.html">← Back to Archive</a><a href="https://stephenolivas.github.io/mtd-funnel-dashboard/" target="_blank">📊 MTD Funnel Reporting →</a></div>
+</div></body></html>"""
+
+
+# ─── Monthly Summary HTML ────────────────────────────────────────────────────
+
+def generate_monthly_html(data, month_date):
+    dates = data["dates"]; daily = data["daily_data"]
+    total_booked = sum(daily[d]["booked"] for d in dates)
+    total_cap = sum(daily[d]["capacity"] for d in dates)
+    avg_util = (total_booked / total_cap * 100) if total_cap > 0 else 0
+
+    day_names = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+    week_header = "".join(f'<th class="col-date">{dn}</th>' for dn in day_names)
+    week_header += '<th class="col-date" style="background:#f0f0f0;">TOTAL</th>'
+
+    weeks = []; cw = []
+    for d in dates:
+        cw.append(d)
+        if d.weekday() == 6 or d == dates[-1]:
+            weeks.append(cw); cw = []
+
+    week_rows = ""; grand_total = 0; dow_totals = [0] * 7
+    for week in weeks:
+        wl = f"{week[0].strftime('%m/%d')}–{week[-1].strftime('%m/%d')}"
+        slots = [None] * 7
+        for d in week: slots[d.weekday()] = d
+        cells = ""; wt = 0
+        for i in range(7):
+            if slots[i] and slots[i] in daily:
+                b = daily[slots[i]]["booked"]; wt += b; dow_totals[i] += b
+                cells += f'<td class="num {"booked" if b > 0 else "zero"}">{b}</td>'
+            else:
+                cells += '<td class="num" style="color:#ccc;">–</td>'
+        grand_total += wt
+        week_rows += f'<tr><td class="label">Week of {wl}</td>{cells}<td class="num total-num">{wt}</td></tr>\n'
+    dow_cells = "".join(f'<td class="num total-num">{t}</td>' for t in dow_totals)
+    dow_cells += f'<td class="num total-num">{grand_total}</td>'
+    week_rows += f'<tr class="total-row"><td class="metric">TOTAL</td>{dow_cells}</tr>\n'
+
+    funnel_totals = {}
+    for m in data["valid_meetings"]:
+        f = m["funnel"]; funnel_totals[f] = funnel_totals.get(f, 0) + 1
+    funnel_rows = ""
+    for fn in sorted(funnel_totals.keys()):
+        funnel_rows += f'<tr><td class="label">{fn}</td><td class="num {"booked" if funnel_totals[fn] > 0 else "zero"}">{funnel_totals[fn]}</td></tr>\n'
+    funnel_rows += f'<tr class="total-row"><td class="metric">TOTAL</td><td class="num total-num">{total_booked}</td></tr>\n'
+
+    month_name = month_date.strftime("%B %Y")
+    title = f"Monthly Summary — {month_name}"
+    return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>{title}</title><style>{COMMON_CSS}</style></head><body>
+{html_header_bar(title, f"{len(dates)} days · First Meetings Only", month_name, "Generated: " + datetime.now(PACIFIC).strftime("%b %-d at %I:%M %p %Z"))}
+<div class="wrap">
+  <div class="summary-cards">
+    <div class="s-card"><div class="s-label">Total Booked</div><div class="s-value green">{total_booked}</div></div>
+    <div class="s-card"><div class="s-label">Total Capacity</div><div class="s-value">{total_cap}</div></div>
+    <div class="s-card"><div class="s-label">Avg Utilization</div><div class="s-value {util_class(avg_util)}">{avg_util:.1f}%</div></div>
+  </div>
+  <div class="card"><div class="sec">WEEK BY WEEK</div>
+    <table><colgroup><col style="width:200px"><col span="8"></colgroup>
+    <thead><tr><th>Week</th>{week_header}</tr></thead><tbody>{week_rows}</tbody></table>
+  </div>
+  <div class="card"><div class="sec">FUNNEL TOTALS</div>
+    <table style="table-layout:auto; max-width:400px;"><thead><tr><th>Funnel</th><th>Total</th></tr></thead><tbody>{funnel_rows}</tbody></table>
+  </div>
+  <div class="footer"><a href="../archive.html">← Back to Archive</a><a href="https://stephenolivas.github.io/mtd-funnel-dashboard/" target="_blank">📊 MTD Funnel Reporting →</a></div>
+</div></body></html>"""
+
+
+# ─── Archive Index ───────────────────────────────────────────────────────────
+
+def generate_archive_html(archive_dir):
+    daily_files = []; weekly_files = []; monthly_files = []
+    ap = Path(archive_dir)
+    if ap.exists():
+        for f in sorted(ap.glob("*.html"), reverse=True):
+            n = f.stem
+            if n.startswith("month-"): monthly_files.append(n)
+            elif n.startswith("week-"): weekly_files.append(n)
+            else:
+                try: date.fromisoformat(n); daily_files.append(n)
+                except ValueError: pass
+
+    def make_links(files):
+        if not files:
+            return '<tr><td class="label" style="color:#999;">No archives yet</td></tr>'
+        rows = ""
+        for f in files:
+            display = f
+            if f.startswith("week-"):
+                d = date.fromisoformat(f.replace("week-", "")); end = d + timedelta(days=6)
+                display = f"Week of {d.strftime('%b %-d')} – {end.strftime('%b %-d, %Y')}"
+            elif f.startswith("month-"):
+                parts = f.replace("month-", "").split("-")
+                display = f"{calendar.month_name[int(parts[1])]} {parts[0]}"
+            else:
+                try:
+                    d = date.fromisoformat(f); display = d.strftime("%A, %B %-d, %Y")
+                    if d.weekday() == 6: display += " (Sun – EOW)"
+                except ValueError: pass
+            rows += f'<tr><td class="label"><a href="archive/{f}.html" style="color:#1b7a2e; text-decoration:none; font-weight:500;">{display}</a></td></tr>\n'
+        return rows
+
+    now_pacific = datetime.now(PACIFIC)
+    return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Call Capacity Dashboard — Archive</title><style>{COMMON_CSS} a:hover {{ text-decoration: underline !important; }}</style></head><body>
+{html_header_bar("Call Capacity Dashboard — Archive", "Historical snapshots and summaries", now_pacific.strftime("%A, %B %-d, %Y"), "Updated: " + now_pacific.strftime("%I:%M %p %Z"))}
+<div class="wrap">
+  <div style="margin-bottom:1rem;"><a href="index.html" style="color:#1b7a2e; font-weight:600; text-decoration:none; font-size:0.85rem;">← Back to Live Dashboard</a></div>
+  <div class="card"><div class="sec">📈 MONTHLY SUMMARIES</div><table style="table-layout:auto"><tbody>{make_links(monthly_files)}</tbody></table></div>
+  <div class="card"><div class="sec">📊 WEEKLY SUMMARIES</div><table style="table-layout:auto"><tbody>{make_links(weekly_files)}</tbody></table></div>
+  <div class="card"><div class="sec">📅 DAILY SNAPSHOTS</div><table style="table-layout:auto"><tbody>{make_links(daily_files)}</tbody></table></div>
+  <div class="footer"><span>Archive generated {now_pacific.strftime("%b %-d, %Y at %I:%M %p %Z")}</span><a href="https://stephenolivas.github.io/mtd-funnel-dashboard/" target="_blank">📊 MTD Funnel Reporting →</a></div>
+</div></body></html>"""
+
+
+# ─── EOD Email ────────────────────────────────────────────────────────────────
+#
+# Runs ONLY at 8pm PT on M-F. No impact on any other run of this script.
+# Meeting counts (today + tomorrow) come from rolling_data already in memory —
+# zero extra API calls for those. The only additional Close API calls at 8pm are:
+#   - fetch_todays_won_opps(): query won opportunities for today
+#   - fetch_leads_for_email(): targeted lead fetches for show rate, closer name, funnel, ICP
+#
+# Required GitHub Secrets:
+#   RESEND_API_KEY  — from resend.com (free tier, 3k emails/month)
+#   EMAIL_FROM      — e.g. "EOD Reports <eod@yourdomain.com>" (domain verified in Resend)
+#   EMAIL_TO        — comma-separated recipient list, e.g. "joe@co.com,manager@co.com"
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
+EMAIL_FROM         = os.environ.get("EMAIL_FROM", "")
+EMAIL_TO           = [e.strip() for e in os.environ.get("EMAIL_TO", "").split(",") if e.strip()]
+
+# ── Field IDs used only by the EOD email ─────────────────────────────────────
+
+CF_LEAD_OWNER_NAME = "cf_gOfS9pFwext58oberEegLyix8hZzeHrxhCZOVh3P3rd"
+CF_SHOW_UP         = "cf_OPyvpU45RdvjLqfm8V1VWwNxrGKogEH2IBJmfCj0Uhq"
+CF_FUNNEL_DEAL     = "cf_xqDQE8fkPsWa0RNEve7hcaxKblCe6489XeZGRDzyPdX"
+CF_ICP             = "cf_OcYP2vXsG2tvbMDubwQNcidiqVegXa7CsyWkOR3f7KN"
+
+# ── Short funnel labels for the email body ────────────────────────────────────
+
+FUNNEL_SHORT = {
+    "Low Ticket Funnel":        "LTF",
+    "LTF - Quiz Funnel":        "LTF Quiz",
+    "Instagram":                "IG",
+    "YouTube":                  "YT",
+    "X":                        "X",
+    "Linkedin":                 "LinkedIn",
+    "Meta Ads":                 "Meta Ads",
+    "VSL":                      "VSL",
+    "Website":                  "Website",
+    "Internal Webinar":         "Webinar",
+    "Mike Newsletter":          "Newsletter",
+    "AK TikTok":                "AK TT",
+    "Anthony IG":               "Anthony IG",
+    "Side Hustle Nation/WWWS":  "SHN/WWWS",
+    "Passivepreneurs":          "Passivepreneurs",
+    "Reactivation Email":       "Reactivation Email",
+    "Reactivation Scrapers":    "Reactivation Scrapers",
+    "LinkedIn Ads":             "LinkedIn Ads",
+    "YouTube Ads":              "YouTube Ads",
+    "Google Ads":               "Google Ads",
+}
+
+
+def fetch_close_users():
+    """Fetch all Close org users and return a user_id → display name dict."""
+    try:
+        data = close_get("user", {"_limit": 100})
+        return {u["id"]: u.get("display_name") or u.get("first_name", "Unknown")
+                for u in data.get("data", [])}
+    except Exception as e:
+        log(f"  ⚠ EOD email: Could not fetch Close users: {e}")
+        return {}
+
+
+def fetch_todays_won_opps(today_str):
+    """Fetch all opportunities marked won today."""
+    opps = []
+    skip = 0
+    while True:
+        data = close_get("opportunity", {
+            "date_won__gte": today_str,
+            "date_won__lte": today_str,
+            "status_type":   "won",
+            "_skip":          skip,
+            "_limit":         100,
+        })
+        opps.extend(data.get("data", []))
+        if not data.get("has_more"):
+            break
+        skip += 100
+    return opps
+
+
+def fetch_leads_for_email(lead_ids):
+    """
+    Fetch leads with all fields the EOD email needs.
+    Runs only at 8pm — separate from the main dashboard lead cache.
+    """
+    fields = ",".join([
+        "id",
+        "status_id",
+        f"custom.{CF_LEAD_OWNER_NAME}",
+        f"custom.{CF_SHOW_UP}",
+        f"custom.{CF_FUNNEL_DEAL}",
+        f"custom.{CF_ICP}",
+    ])
+    cache = {}
+    for lid in lead_ids:
+        try:
+            cache[lid] = close_get(f"lead/{lid}", {"_fields": fields})
+        except Exception as e:
+            log(f"  ⚠ EOD email: Could not fetch lead {lid}: {e}")
+            cache[lid] = None
+    return cache
+
+
+def build_eod_data(rolling_data, today):
+    """Assemble all data points needed for the EOD email."""
+
+    # Meeting counts come from rolling_data already in memory — zero extra API calls
+    today_count    = rolling_data["daily_data"].get(today, {}).get("booked", 0)
+    tomorrow       = today + timedelta(days=1)
+    tomorrow_count = rolling_data["daily_data"].get(tomorrow, {}).get("booked", 0)
+
+    # Lead IDs from today's meetings (needed for show rate)
+    today_lead_ids = list(set(
+        m["lead_id"]
+        for m in rolling_data["valid_meetings"]
+        if m["date"] == today and m.get("lead_id")
+    ))
+
+    # Fetch today's won opportunities
+    today_str = today.isoformat()
+    won_opps  = fetch_todays_won_opps(today_str)
+    log(f"   📧 EOD: {len(won_opps)} won opps today, {today_count} meetings today")
+
+    # Combine all lead IDs we need: today's meetings + won opp leads
+    won_lead_ids = list(set(o["lead_id"] for o in won_opps if o.get("lead_id")))
+    all_lead_ids = list(set(today_lead_ids + won_lead_ids))
+
+    email_leads = fetch_leads_for_email(all_lead_ids)
+
+    # Fetch user map for resolving user_id → display name on won opps
+    user_map = fetch_close_users()
+
+    # ── Show rate ─────────────────────────────────────────────────────────────
+    # Exclude leads in "Reschedule" status from both numerator and denominator —
+    # they didn't have a chance to show, so including them deflates the rate.
+    RESCHEDULE_STATUS_ID = "stat_2SmOUMCp1vDFJF0TcJ011hNnpLYWDGwugyo4JyiRMEP"
+    showable_ids = [
+        lid for lid in today_lead_ids
+        if email_leads.get(lid) and
+           email_leads[lid].get("status_id") != RESCHEDULE_STATUS_ID
+    ]
+    shown = sum(
+        1 for lid in showable_ids
+        if str(email_leads[lid].get(f"custom.{CF_SHOW_UP}", "")).lower() == "yes"
+    )
+    show_rate = (shown / len(showable_ids) * 100) if showable_ids else 0.0
+
+    # ── Revenue ───────────────────────────────────────────────────────────────
+    # Close stores opportunity `value` in USD cents — divide by 100.
+    # If revenue looks wrong, check Close Settings → Pipeline to confirm units.
+    total_revenue = sum((o.get("value") or 0) for o in won_opps) / 100
+
+    # ── Closers ───────────────────────────────────────────────────────────────
+    # Won opps have a `user_id` (the assigned user). Resolve to display name via user_map.
+    closer_counts = {}
+    for o in won_opps:
+        uid  = o.get("user_id") or ""
+        name = user_map.get(uid) or uid or "Unknown"
+        closer_counts[name] = closer_counts.get(name, 0) + 1
+
+    # ── Closed Won Funnel / ICP ───────────────────────────────────────────────
+    icp_lines = []
+    for o in won_opps:
+        lid  = o.get("lead_id")
+        lead = email_leads.get(lid)
+        if not lead:
+            continue
+        raw_funnel   = lead.get(f"custom.{CF_FUNNEL_DEAL}") or ""
+        funnel_full  = CLOSE_VALUE_TO_FUNNEL.get(raw_funnel, raw_funnel) or "Unknown"
+        funnel_label = FUNNEL_SHORT.get(funnel_full, funnel_full)
+        icp          = lead.get(f"custom.{CF_ICP}") or "Unknown"
+        icp_lines.append(f"{funnel_label} / {icp}")
+
+    return {
+        "today":          today,
+        "today_count":    today_count,
+        "tomorrow_count": tomorrow_count,
+        "show_rate":      show_rate,
+        "deals":          len(won_opps),
+        "revenue":        total_revenue,
+        "closer_counts":  closer_counts,
+        "icp_lines":      icp_lines,
+    }
+
+
+def format_eod_email(data):
+    """Format the EOD email — returns (subject, plain_text, html)."""
+    today    = data["today"]
+    date_str = today.strftime("%-m/%-d")
+    day_full = today.strftime("%A, %B %-d, %Y")
+
+    # Revenue
+    rev = data["revenue"]
+    if rev >= 1_000_000:
+        rev_str = f"${rev / 1_000_000:.2f}M"
+    elif rev >= 1_000:
+        rev_str = f"${rev / 1_000:.1f}k"
+    else:
+        rev_str = f"${rev:,.0f}"
+
+    # Closers: sorted alphabetically, "x2" suffix for multiples
+    closer_parts = []
+    for name, count in sorted(data["closer_counts"].items()):
+        closer_parts.append(f"{name} x{count}" if count > 1 else name)
+    closers_str = ", ".join(closer_parts) if closer_parts else "None"
+
+    # ICP lines
+    icp_lines_plain = (
+        "\n".join(f"* {line}" for line in data["icp_lines"])
+        if data["icp_lines"] else "* None"
+    )
+
+    subject = f"EOD Stats {date_str}"
+
+    # ── Plain text ────────────────────────────────────────────────────────────
+    plain = (
+        f"EOD stats for {date_str}:\n\n"
+        f"Revenue: {rev_str}\n"
+        f"Deals Closed: {data['deals']}\n"
+        f"Closers: {closers_str}\n"
+        f"Todays new meetings: {data['today_count']}\n"
+        f"Show rate: {data['show_rate']:.0f}%\n"
+        f"New meetings set for tomorrow: {data['tomorrow_count']}\n\n"
+        f"Closed won funnel / ICP:\n{icp_lines_plain}\n"
+    )
+
+    # ── HTML ──────────────────────────────────────────────────────────────────
+    icp_rows = "".join(
+        f'<tr><td style="padding:6px 0;border-bottom:1px solid #f0f0f0;color:#333;font-size:14px;">📌 {line}</td></tr>'
+        for line in data["icp_lines"]
+    ) if data["icp_lines"] else '<tr><td style="padding:6px 0;color:#999;font-size:14px;">None</td></tr>'
+
+    def stat_row(label, value, value_color="#1a1a1a"):
+        return f"""
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #f5f5f5;color:#666;font-size:13px;width:220px;">{label}</td>
+          <td style="padding:10px 0;border-bottom:1px solid #f5f5f5;color:{value_color};font-size:14px;font-weight:600;">{value}</td>
+        </tr>"""
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+
+        <!-- Header -->
+        <tr><td style="background:#1b2e1b;border-radius:8px 8px 0 0;padding:24px 28px;">
+          <p style="margin:0;color:#a3c4a3;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;">Call Capacity Dashboard</p>
+          <h1 style="margin:6px 0 0;color:#ffffff;font-size:22px;font-weight:700;">EOD Stats — {date_str}</h1>
+          <p style="margin:4px 0 0;color:#a3c4a3;font-size:12px;">{day_full}</p>
+        </td></tr>
+
+        <!-- Main stats -->
+        <tr><td style="background:#ffffff;padding:24px 28px;">
+          <p style="margin:0 0 14px;font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#1b5e1b;border-left:3px solid #1b5e1b;padding-left:8px;">TODAY'S NUMBERS</p>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            {stat_row("💰 Revenue", rev_str, "#1b7a2e")}
+            {stat_row("🤝 Deals Closed", str(data['deals']))}
+            {stat_row("👤 Closers", closers_str)}
+            {stat_row("📅 New Meetings Today", str(data['today_count']))}
+            {stat_row("✅ Show Rate", f"{data['show_rate']:.0f}%")}
+            {stat_row("📆 Meetings Set for Tomorrow", str(data['tomorrow_count']))}
+          </table>
+        </td></tr>
+
+        <!-- Divider -->
+        <tr><td style="background:#ffffff;padding:0 28px;"><hr style="border:none;border-top:1px solid #ececec;margin:0;"></td></tr>
+
+        <!-- ICP block -->
+        <tr><td style="background:#ffffff;padding:20px 28px 28px;border-radius:0 0 8px 8px;">
+          <p style="margin:0 0 12px;font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#1b5e1b;border-left:3px solid #1b5e1b;padding-left:8px;">CLOSED WON — FUNNEL / ICP</p>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            {icp_rows}
+          </table>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:16px 0 0;text-align:center;">
+          <p style="margin:0;color:#aaa;font-size:11px;">Auto-generated by Call Capacity Dashboard · <a href="https://stephenolivas.github.io/call-capacity-dashboard/index.html" style="color:#1b7a2e;text-decoration:none;">View Dashboard →</a></p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+    return subject, plain, html
+
+
+def send_eod_email(rolling_data, today, recipients=None):
+    """
+    Build and send the EOD email via Gmail SMTP.
+    recipients: list of email addresses to send to (defaults to EMAIL_TO).
+    All failures are caught and logged — they will never crash the dashboard run.
+    """
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    recipients = recipients or EMAIL_TO
+
+    if not GMAIL_APP_PASSWORD:
+        log("⚠ EOD Email: GMAIL_APP_PASSWORD not set — skipping.")
+        return
+    if not recipients:
+        log("⚠ EOD Email: No recipients — skipping.")
+        return
+    if not EMAIL_FROM:
+        log("⚠ EOD Email: EMAIL_FROM not set — skipping.")
+        return
+
+    try:
+        data                 = build_eod_data(rolling_data, today)
+        subject, plain, html = format_eod_email(data)
+
+        log(f"   Sending: '{subject}' → {recipients}")
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"]    = f"EOD Reports <{EMAIL_FROM}>"
+        msg["To"]      = ", ".join(recipients)
+        msg.attach(MIMEText(plain, "plain"))
+        msg.attach(MIMEText(html,  "html"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(EMAIL_FROM, GMAIL_APP_PASSWORD)
+            smtp.sendmail(EMAIL_FROM, recipients, msg.as_string())
+
+        log(f"✅ EOD email sent to {recipients}")
+
+    except Exception as e:
+        log(f"❌ EOD email error (dashboard unaffected): {e}")
+
+
+# ─── Main ────────────────────────────────────────────────────────────────────
+
+def main():
+    global _api_call_count
+    if not CLOSE_API_KEY:
+        log("❌ Error: CLOSE_API_KEY environment variable is not set."); sys.exit(1)
+
+    _api_call_count = 0; start_time = time.time()
+    log("🚀 Starting Call Capacity Dashboard update (v14 — dual-lane + rep details)...")
+
+    # Capture time NOW before the ~5 min API calls, so hour checks at the end
+    # reflect when this run *started*, not when it finished.
+    now_at_start = datetime.now(PACIFIC)
+    today        = now_at_start.date()
+    run_hour     = now_at_start.hour
+    run_minute   = now_at_start.minute
+    run_weekday  = today.weekday()
+    log(f"📅 Today: {today} ({today.strftime('%A')}) · Run started: {now_at_start.strftime('%I:%M %p %Z')}")
+    Path(ARCHIVE_DIR).mkdir(exist_ok=True)
+
+    # ── Rolling dashboard (field-based, both lanes) ──
+    log("\n═══ Rolling Dashboard ═══")
+    rolling_start = today - timedelta(days=4)
+    rolling_end = today + timedelta(days=10)
+    rolling_dates = [rolling_start + timedelta(days=i) for i in range(14)]
+    field_leads = fetch_field_leads(rolling_start, rolling_end)
+
+    log("\n── Lane 1 ──")
+    lane1_data = build_dashboard_data(field_leads, rolling_dates, today=today, lane_reps=LANE_1_REPS, lane_label="Lane 1")
+    log("\n── Lane 2 ──")
+    lane2_data = build_dashboard_data(field_leads, rolling_dates, today=today, lane_reps=LANE_2_REPS, lane_label="Lane 2")
+
+    # ── Calendly Capacity (Lane 1 only) ──
+    log("\n═══ Calendly Capacity ═══")
+    capacity_cache = load_capacity_cache()
+
+    # Only query Calendly for today + forward days (past days use cache)
+    forward_dates = [d for d in rolling_dates if d >= today]
+    calendly_slots = fetch_calendly_available_slots(forward_dates)
+
+    # Update Lane 1 capacity with real numbers
+    for d in rolling_dates:
+        booked = lane1_data["daily_data"][d]["booked"]
+
+        if d in calendly_slots:
+            # Fresh Calendly data: capacity = available + booked
+            available = calendly_slots[d]["available"]
+            real_capacity = available + booked
+            lane1_data["daily_data"][d]["capacity"] = real_capacity
+            # Cache this computed capacity
+            capacity_cache[d] = real_capacity
+            log(f"   {d.strftime('%a %m/%d')}: {available} avail + {booked} booked = {real_capacity} capacity (Calendly)")
+        elif d in capacity_cache:
+            # Trailing day with cached capacity
+            lane1_data["daily_data"][d]["capacity"] = capacity_cache[d]
+            log(f"   {d.strftime('%a %m/%d')}: {capacity_cache[d]} capacity (cached)")
+        else:
+            # No Calendly data, no cache — keep static
+            static = get_capacity(d)
+            log(f"   {d.strftime('%a %m/%d')}: {static} capacity (static fallback)")
+
+    save_capacity_cache(capacity_cache)
+
+    # Build all-reps data for EOD email (no lane filter — counts all sales calls)
+    log("\n── All Reps (EOD email) ──")
+    rolling_data = build_dashboard_data(field_leads, rolling_dates, today=today, lane_reps=None, lane_label="All Reps")
+
+    html = generate_rolling_html(lane1_data, lane2_data)
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as f: f.write(html)
+    log(f"✅ {OUTPUT_FILE} written (L1: {len(lane1_data['valid_meetings'])} · L2: {len(lane2_data['valid_meetings'])} leads)")
+
+    # ── Daily snapshot ──
+    log("\n═══ Daily Snapshot ═══")
+    sp = f"{ARCHIVE_DIR}/{today.isoformat()}.html"
+    with open(sp, "w", encoding="utf-8") as f: f.write(html)
+    log(f"✅ {sp} saved")
+
+    # ── Weekly summary (Monday) ──
+    if today.weekday() == 0:
+        log("\n═══ Weekly Summary ═══")
+        pm = today - timedelta(days=7); ps = today - timedelta(days=1)
+        wd = [pm + timedelta(days=i) for i in range(7)]
+        w_leads = fetch_field_leads(pm, ps + timedelta(days=1))
+        wdata = build_dashboard_data(w_leads, wd, lane_reps=LANE_1_REPS, lane_label="Lane 1")
+        wh = generate_weekly_html(wdata, pm)
+        wp = f"{ARCHIVE_DIR}/week-{pm.isoformat()}.html"
+        with open(wp, "w", encoding="utf-8") as f: f.write(wh)
+        log(f"✅ {wp} saved ({len(wdata['valid_meetings'])} leads)")
+    else:
+        log(f"\n⏭ Weekly: skipped ({today.strftime('%A')})")
+
+    # ── Monthly summary (1st) ──
+    if today.day == 1:
+        log("\n═══ Monthly Summary ═══")
+        pme = today - timedelta(days=1); pms = pme.replace(day=1)
+        nd = (pme - pms).days + 1; md = [pms + timedelta(days=i) for i in range(nd)]
+        m_leads = fetch_field_leads(pms, today)
+        mdata = build_dashboard_data(m_leads, md, lane_reps=LANE_1_REPS, lane_label="Lane 1")
+        mh = generate_monthly_html(mdata, pms)
+        mp = f"{ARCHIVE_DIR}/month-{pms.strftime('%Y-%m')}.html"
+        with open(mp, "w", encoding="utf-8") as f: f.write(mh)
+        log(f"✅ {mp} saved ({len(mdata['valid_meetings'])} leads)")
+    else:
+        log(f"\n⏭ Monthly: skipped (day {today.day})")
+
+    # ── Archive index ──
+    log("\n═══ Archive Index ═══")
+    ah = generate_archive_html(ARCHIVE_DIR)
+    with open("archive.html", "w", encoding="utf-8") as f: f.write(ah)
+    log("✅ archive.html regenerated")
+
+    # ── EOD Email (8pm PT, M-F only — or forced via FORCE_EOD_EMAIL=true for testing) ──
+    # run_minute < 15 ensures only the first run of the hour fires, not all 4.
+    # run_weekday < 5 ensures M-F only (0=Mon ... 4=Fri, 5=Sat, 6=Sun).
+    force_email = os.environ.get("FORCE_EOD_EMAIL", "").lower() == "true"
+    if (run_hour == 20 and run_weekday < 5 and run_minute < 15) or force_email:
+        send_eod_email(rolling_data, today, EMAIL_TO)
+
+    # ── Friday 4pm PT — send to Joe only ──
+    if run_hour == 16 and run_weekday == 4 and run_minute < 15:
+        log("\n═══ Friday 4pm Email (Joe) ═══")
+        send_eod_email(rolling_data, today, ["joedysert@modern-amenities.com"])
+
+    elapsed = time.time() - start_time
+    log(f"\n🏁 Done! API calls: {_api_call_count} | Time: {elapsed:.1f}s")
 
 
 if __name__ == "__main__":
