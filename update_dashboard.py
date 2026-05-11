@@ -113,6 +113,10 @@ def fetch_calendly_available_slots(dates):
             if accel_count > 0:
                 result[d] = accel_count
                 log(f"   {d.strftime('%a %m/%d')}: {accel_count} slots (Accelerator)")
+            else:
+                # Both returned 0 — store 0 (no open slots, not "no data")
+                result[d] = 0
+                log(f"   {d.strftime('%a %m/%d')}: 0 slots (no availability)")
 
     if not result:
         log("   ⚠ No available slots found (may be outside scheduling window)")
@@ -608,6 +612,32 @@ def fetch_meeting_booking_dates(valid_meetings):
     Returns: {lead_id: date_obj} for booking dates
              Also populates meeting_titles: {lead_id: str} for calendar source
     """
+    # Known Calendly event type names — used to extract calendar source from meeting titles
+    KNOWN_CALENDAR_NAMES = [
+        "Vendingprenuers Consultation",
+        "Vending Accelerator Call",
+        "Vending Strategy Call with Vendingpreneurs",
+        "New Vendingpreneur Strategy Call",
+        "Vending Route Consultation",
+        "Cash-Flowing Vending Route Advisory Interview",
+        "Vending Quick Discovery",
+        "Acquisition Ace Strategy Call",
+        "Vendingpreneurs Rescheduled Call",
+        "Vendingpreneurs Follow-Up",
+        "Vendingpreneurs Follow Up",
+        "Vendingpreneurs Onboarding Call",
+        "Post Masterclass Strategy Call",
+    ]
+
+    def extract_calendar_name(title):
+        """Extract the calendar event type name from a meeting title that includes contact names."""
+        if not title:
+            return "Unknown"
+        for name in KNOWN_CALENDAR_NAMES:
+            if name.lower() in title.lower():
+                return name
+        return title  # Return full title if no known name matched
+
     step_start = time.time()
     unique_leads = {}
     for m in valid_meetings:
@@ -646,8 +676,8 @@ def fetch_meeting_booking_dates(valid_meetings):
                             booking_dates[lead_id] = created_dt.astimezone(PACIFIC).date()
                         except (ValueError, TypeError):
                             pass
-                    # Capture meeting title for calendar source
-                    meeting_titles[lead_id] = title
+                    # Capture meeting title for calendar source (extract event name, strip contact names)
+                    meeting_titles[lead_id] = extract_calendar_name(title)
                     break
         except Exception as e:
             if i == 0:
