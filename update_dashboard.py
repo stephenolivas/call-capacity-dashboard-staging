@@ -958,46 +958,49 @@ def generate_lane_content(data, dates, today, daily_goal_map, n_cols, lane_rep_n
         elif d < today: return " past"
         return ""
 
-    # Capacity metrics (staging: Calendly-aware)
-    cap_r = booked_r = avail_r = filled_r = goal_r = ""
+    # Capacity metrics (staging: Calendly-driven)
+    cal_avail_r = booked_r = open_r = cap_pct_r = ""
     for d in dates:
-        c = daily[d]["capacity"]  # Static goal (42)
         b = daily[d]["booked"]
-        cal_avail = daily[d].get("calendly_available")  # From Calendly, or None
+        cal_slots = daily[d].get("calendly_available")  # From Calendly, or None
         t = tc(d)
 
         if show_capacity:
-            # Capacity Goal (static target)
-            cap_r += f'<td class="num{t}">{c if c > 0 else "–"}</td>'
+            # Calendar Availability = Calendly Available + Booked (total slots)
+            if cal_slots is not None:
+                total_slots = cal_slots + b
+                cal_avail_r += f'<td class="num{t}">{total_slots}</td>'
+            else:
+                # Fallback to static capacity when no Calendly data
+                c = daily[d]["capacity"]
+                total_slots = c if c > 0 else 0
+                cal_avail_r += f'<td class="num{t}">{c if c > 0 else "–"}</td>'
+
             # Booked
             booked_r += f'<td class="num {"booked" if b > 0 else "zero"}{t}">{b}</td>'
-            # Available Slots (Calendly if available, else derived)
-            if cal_avail is not None:
-                avail_r += f'<td class="num{t}">{cal_avail}</td>'
-            elif c > 0:
-                avail_r += f'<td class="num{t}">{c - b}</td>'
+
+            # Open Availability = total_slots - booked
+            if cal_slots is not None:
+                open_slots = cal_slots
+                open_r += f'<td class="num{t}">{open_slots}</td>'
+            elif daily[d]["capacity"] > 0:
+                open_slots = daily[d]["capacity"] - b
+                open_r += f'<td class="num{t}">{open_slots}</td>'
             else:
-                avail_r += f'<td class="num{t}">–</td>'
-            # Availability Filled % = Booked / (Booked + Available)
-            actual_avail = cal_avail if cal_avail is not None else (c - b if c > 0 else 0)
-            total_slots = b + actual_avail
+                open_r += f'<td class="num{t}">–</td>'
+                total_slots = 0
+
+            # Calendar Capacity = Booked / Calendar Availability
             if total_slots > 0:
-                filled_pct = b / total_slots * 100
-                filled_r += f'<td class="num {util_class(filled_pct)}{t}">{filled_pct:.1f}%</td>'
+                cap_pct = b / total_slots * 100
+                cap_pct_r += f'<td class="num {util_class(cap_pct)}{t}">{cap_pct:.1f}%</td>'
             else:
-                filled_r += f'<td class="num{t}">N/A</td>'
-            # Capacity to Goal % = Booked / Capacity Goal
-            if c > 0:
-                goal_pct = b / c * 100
-                goal_r += f'<td class="num{t}">{goal_pct:.1f}%</td>'
-            else:
-                goal_r += f'<td class="num{t}">N/A</td>'
+                cap_pct_r += f'<td class="num{t}">N/A</td>'
         else:
-            cap_r += f'<td class="num{t}">–</td>'
+            cal_avail_r += f'<td class="num{t}">–</td>'
             booked_r += f'<td class="num {"booked" if b > 0 else "zero"}{t}">{b}</td>'
-            avail_r += f'<td class="num{t}">–</td>'
-            filled_r += f'<td class="num{t}">N/A</td>'
-            goal_r += f'<td class="num{t}">N/A</td>'
+            open_r += f'<td class="num{t}">–</td>'
+            cap_pct_r += f'<td class="num{t}">N/A</td>'
 
     # Funnel section rows (dynamic — only funnels with >=1 call)
     ext_rows = build_funnel_rows(data, dates, today, daily_goal_map, "external")
@@ -1086,11 +1089,10 @@ def generate_lane_content(data, dates, today, daily_goal_map, n_cols, lane_rep_n
     <table><colgroup><col style="width:200px"><col span="{n_cols}"></colgroup>
       <thead><tr><th></th>{date_headers}</tr></thead>
       <tbody>
-        <tr><td class="metric">Capacity Goal</td>{cap_r}</tr>
+        <tr><td class="metric">Calendar Availability</td>{cal_avail_r}</tr>
         <tr><td class="metric">Booked</td>{booked_r}</tr>
-        <tr><td class="metric">Available Slots</td>{avail_r}</tr>
-        <tr><td class="metric">Availability Filled %</td>{filled_r}</tr>
-        <tr><td class="metric">Capacity to Goal</td>{goal_r}</tr>
+        <tr><td class="metric">Open Availability</td>{open_r}</tr>
+        <tr><td class="metric">Calendar Capacity</td>{cap_pct_r}</tr>
       </tbody>
     </table>
   </div>
