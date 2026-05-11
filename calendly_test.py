@@ -64,15 +64,23 @@ def main():
 
     # Step 2: Find Lane 1 rep event type URIs
     log("\n📋 Step 2: Finding Lane 1 rep 'New Vendingpreneur Strategy Call' calendars...")
-    et_data = api_get("https://api.calendly.com/event_types", {
-        "organization": org_uri, "active": "true", "count": 200,
-    })
-    if "error" in et_data:
-        log(f"   ❌ Error: {et_data}")
-        write_html(); sys.exit(1)
+    all_event_types = []
+    params = {"organization": org_uri, "active": "true", "count": 100}
+    while True:
+        et_data = api_get("https://api.calendly.com/event_types", params)
+        if "error" in et_data:
+            log(f"   ❌ Error: {et_data}")
+            write_html(); sys.exit(1)
+        all_event_types.extend(et_data.get("collection", []))
+        next_token = et_data.get("pagination", {}).get("next_page_token")
+        if next_token:
+            params["page_token"] = next_token
+        else:
+            break
+    log(f"   Fetched {len(all_event_types)} event types")
 
     lane1_event_types = {}  # calendly_username → event type info
-    for et in et_data.get("collection", []):
+    for et in all_event_types:
         url = et.get("scheduling_url", "")
         for cal_user, rep_name in LANE_1_CALENDLY_USERS.items():
             if cal_user in url and TARGET_EVENT_SLUG in url:
