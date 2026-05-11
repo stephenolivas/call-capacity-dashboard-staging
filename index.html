@@ -1,85 +1,453 @@
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"><title>Calendly v5</title>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Call Capacity Dashboard</title>
 <style>
-  body { font-family: monospace; background: #1a1a1a; color: #e0e0e0; padding: 2rem; max-width: 1200px; }
-  pre { white-space: pre-wrap; line-height: 1.5; font-size: 13px; }
-  h1 { color: #1b7a2e; }
-  .time { color: #888; font-size: 12px; }
-</style></head><body>
-<h1>Calendly v5 — Team Calendar Available Slots</h1>
-<p class="time">Last run: 2026-05-11 21:45 UTC</p>
-<pre>======================================================================
-CALENDLY v5 — Team Calendar Available Slots
-======================================================================
-✅ Authenticated | Org: https://api.calendly.com/organizations/277c4839-a060-431e-b88b-722bd5526e51
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: 'Inter', -apple-system, system-ui, sans-serif; background: #ffffff; color: #1a1a1a; }
+.header { background: #1b2e1b; color: #fff; padding: 0.8rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+.header h1 { font-size: 1.15rem; font-weight: 700; }
+.header .sub { font-size: 0.68rem; color: #a3c4a3; margin-top: 2px; }
+.header .right { text-align: right; font-family: 'JetBrains Mono', monospace; }
+.header .right .date { font-size: 0.78rem; font-weight: 600; }
+.header .right .time { font-size: 0.65rem; color: #a3c4a3; }
+.dot { display: inline-block; width: 7px; height: 7px; background: #4ade80; border-radius: 50%; margin-right: 5px; }
+.wrap { padding: 1rem 1.5rem 2rem; max-width: 1500px; margin: 0 auto; }
+.sec { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #1b5e1b; padding: 0.55rem 0.6rem 0.3rem; border-left: 3px solid #1b5e1b; background: #f8faf8; }
+.card { border: 1px solid #d4d4d4; border-radius: 4px; overflow-x: auto; margin-bottom: 1rem; background: #fff; }
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+th { padding: 0.5rem 0.6rem; font-size: 0.68rem; font-weight: 700; text-align: center; color: #555; border-bottom: 2px solid #d4d4d4; white-space: nowrap; background: #fafafa; line-height: 1.4; }
+th:first-child { text-align: left; padding-left: 0.6rem; }
+td { padding: 0.35rem 0.6rem; border-bottom: 1px solid #ececec; font-size: 0.78rem; }
+td.num { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; font-weight: 500; color: #333; }
+td.label { font-weight: 500; font-size: 0.76rem; padding-left: 0.6rem; color: #1a1a1a; }
+.metric { font-weight: 600; font-size: 0.78rem; padding-left: 0.6rem; color: #1a1a1a; }
+th.col-date.today { background: #fdf3e0 !important; color: #b45309; }
+td.today { background: #fdf8ee !important; }
+th.col-date.past { background: #f5f5f5 !important; color: #999; }
+td.past { background: #fafafa !important; }
+.booked { color: #1b7a2e; font-weight: 700; }
+.zero { color: #ccc; font-weight: 400; }
+.has-count { color: #1b7a2e; font-weight: 700; }
+.total-num { font-weight: 700; color: #1a1a1a; }
+.util-low { color: #16a34a; font-weight: 700; }
+.util-mid { color: #b45309; font-weight: 700; }
+.util-high { color: #dc2626; font-weight: 700; }
+tr.total-row td { border-top: 2px solid #bbb; }
+tr.section-divider td { border-top: 2px solid #d4d4d4; padding: 0; height: 0; }
+tr.section-label-row td { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; padding: 0.5rem 0.6rem 0.25rem; border-bottom: 1px solid #d4d4d4; }
+tr.section-label-row.sec-ext td { color: #1b5e1b; background: #f8faf8; border-top: none; }
+tr.section-label-row.sec-inh td { color: #5e4b1b; background: #fdf8f0; border-top: 2px solid #d4d4d4; }
+tr.section-label-row.sec-unc td { color: #666; background: #f5f5f5; border-top: 2px solid #d4d4d4; }
+.footer { margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid #e0e0e0; font-size: 0.72rem; color: #888; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+.footer a { color: #1b7a2e; text-decoration: none; font-weight: 600; }
+.footer a:hover { text-decoration: underline; }
+.excluded-section { margin-top: 0.5rem; }
+.excluded-section summary { font-size: 0.72rem; font-weight: 600; color: #666; cursor: pointer; padding: 0.4rem 0; }
+.excluded-section .exc-table { margin-top: 0.3rem; }
+.excluded-section .exc-table td { font-size: 0.7rem; color: #666; padding: 0.2rem 0.6rem; }
+.summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.25rem; }
+.s-card { background: #f8faf8; border: 1px solid #d4d4d4; border-radius: 6px; padding: 1rem; }
+.s-card .s-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #666; margin-bottom: 0.3rem; }
+.s-card .s-value { font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 700; }
+.s-card .s-value.green { color: #1b7a2e; }
+.sec-ltf { color: #1b3a5e; border-left-color: #2563eb; background: #f0f4ff; }
+tr.section-label-row.sec-ltf td { color: #1b3a5e; background: #f0f4ff; border-top: 2px solid #d4d4d4; }
+.ltf-closer { color: #1b7a2e; font-weight: 600; }
+.ltf-setter { color: #2563eb; font-weight: 600; }
+.ltf-total { color: #1a1a1a; font-weight: 700; }
+.ltf-pct { color: #666; font-weight: 500; font-size: 0.7rem; }
+.ltf-collapsible { margin-bottom: 1rem; }
+.ltf-collapsible summary { font-size: 0.72rem; font-weight: 600; color: #1b3a5e; cursor: pointer; padding: 0.5rem 0.6rem; background: #f0f4ff; border: 1px solid #d4d4d4; border-radius: 4px; }
+.ltf-collapsible summary:hover { background: #e4eaff; }
+.ltf-collapsible details[open] summary { border-radius: 4px 4px 0 0; border-bottom: none; }
+.ltf-collapsible details[open] .card { margin-top: 0 !important; border-top: none; border-radius: 0 0 4px 4px; }
+@media (max-width: 900px) { .header { padding: 0.6rem 0.75rem; } .wrap { padding: 0.5rem 0.75rem; } .summary-cards { grid-template-columns: 1fr; } }
 
-======================================================================
-SECTION 1: TEAM CALENDAR — Available Slots
-These are the /d/ team calendars prospects book through
-======================================================================
 
-📅 Vendingprenuers Consultation
-   URI: https://api.calendly.com/event_types/3acb4582-147a-4652-ad6b-5effe4a1b755
-   TODAY: ERROR — {'error': 400, 'text': '{"details":[{"message":"start_time must be in the future","parameter":"start_time"}],"message":"The supplied parameters are invalid.","title":"Invalid Argument"}'}
-   Tue 05/12: 2 available slots
-   Wed 05/13: 28 available slots
-   Thu 05/14: 28 available slots
-   Fri 05/15: 0 available slots
+    .lane-toggle { display:flex; gap:8px; margin-bottom:1rem; }
+    .lane-btn { padding:10px 24px; font-size:0.95rem; font-weight:700; border:2px solid #1b7a2e;
+                border-radius:6px; cursor:pointer; transition:all 0.15s; background:#fff; color:#1b7a2e; }
+    .lane-btn.active { background:#1b7a2e; color:#fff; }
+    .lane-btn:hover:not(.active) { background:#f0faf0; }
+    
 
-📅 Vending Accelerator Call
-   URI: https://api.calendly.com/event_types/f1a11c05-d0c0-41b7-aaec-b60bf5d96f39
-   TODAY: ERROR — {'error': 400, 'text': '{"details":[{"message":"start_time must be in the future","parameter":"start_time"}],"message":"The supplied parameters are invalid.","title":"Invalid Argument"}'}
-   Tue 05/12: 2 available slots
-   Wed 05/13: 28 available slots
-   Thu 05/14: 34 available slots
-   Fri 05/15: 34 available slots
+    .day-clickable { cursor:pointer; transition:background 0.15s, transform 0.1s; position:relative; }
+    .day-clickable:hover { background:rgba(27,122,46,0.08); border-radius:4px; }
+    .day-clickable:active { transform:scale(0.97); }
+    .day-panel-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.3); z-index:998; }
+    .day-panel { display:none; position:fixed; top:0; right:0; width:380px; height:100%; background:#fff; box-shadow:-4px 0 20px rgba(0,0,0,0.15);
+                 z-index:999; overflow-y:auto; padding:1.5rem; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
+    .day-panel .dp-close { position:absolute; top:12px; right:16px; font-size:1.2rem; cursor:pointer; color:#888; background:none; border:none; }
+    .day-panel .dp-close:hover { color:#333; }
+    .day-panel .dp-title { font-size:1.1rem; font-weight:700; margin-bottom:0.2rem; }
+    .day-panel .dp-subtitle { font-size:0.75rem; color:#888; margin-bottom:1.2rem; }
+    .day-panel .dp-section { font-size:0.7rem; font-weight:700; color:#1b7a2e; text-transform:uppercase; letter-spacing:0.5px; margin:1.2rem 0 0.5rem; }
+    .day-panel .dp-bar-row { display:flex; align-items:center; margin-bottom:0.4rem; font-size:0.78rem; }
+    .day-panel .dp-bar-label { width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .day-panel .dp-bar-track { flex:1; height:16px; background:#f0f0f0; border-radius:3px; margin:0 8px; overflow:hidden; }
+    .day-panel .dp-bar-fill { height:100%; background:#1b7a2e; border-radius:3px; transition:width 0.3s; }
+    .day-panel .dp-bar-val { width:55px; text-align:right; font-weight:600; font-size:0.72rem; color:#555; }
+    .day-panel .dp-rep-row { display:flex; justify-content:space-between; padding:3px 0; font-size:0.78rem; border-bottom:1px solid #f5f5f5; }
+    .day-panel .dp-rep-name { color:#333; }
+    .day-panel .dp-rep-count { font-weight:600; color:#1b7a2e; }
+    .day-panel .dp-booked-table { width:100%; font-size:0.78rem; border-collapse:collapse; }
+    .day-panel .dp-booked-table td { padding:4px 6px; border-bottom:1px solid #f0f0f0; }
+    .day-panel .dp-booked-table td:first-child { font-weight:600; }
+    .day-panel .dp-booked-table td:last-child { text-align:right; color:#888; }
+    .day-panel .dp-coming-soon { color:#aaa; font-size:0.78rem; font-style:italic; padding:0.5rem 0; }
+    
+</style>
+</head><body>
+<div class="header">
+  <div><h1>📞 Call Capacity Dashboard</h1><div class="sub">4-Day Trailing + 10-Day Lookahead · First Meetings Only · 21 working days in May</div></div>
+  <div class="right"><div class="date"><span class="dot"></span>Monday, May 11, 2026</div><div class="time">Last updated: 03:09 PM PDT · <a href="changelog.html" style="color:#fff;opacity:0.7;text-decoration:none;font-weight:400;">📋 Changelog</a></div></div>
+</div>
+<div class="wrap">
 
-======================================================================
-SECTION 2: COMPARISON — Team vs Rep Calendars
-Checking if team and individual rep calendars return different numbers
-======================================================================
-   TODAY: Team=0, Reps=0 — ✅ MATCH
-   Tue 05/12: Team=4, Reps=0 — ⚠️ DIFF (team:4 vs rep:0)
-   Wed 05/13: Team=56, Reps=25 — ⚠️ DIFF (team:56 vs rep:25)
-   Thu 05/14: Team=62, Reps=57 — ⚠️ DIFF (team:62 vs rep:57)
-   Fri 05/15: Team=34, Reps=41 — ⚠️ DIFF (team:34 vs rep:41)
+  <div class="lane-toggle">
+    <button id="btn1" class="lane-btn active" onclick="showLane(1)">Lane 1</button>
+    <button id="btn2" class="lane-btn" onclick="showLane(2)">Lane 2</button>
+  </div>
 
-======================================================================
-SECTION 3: TODAY'S EVENTS BY CALENDAR NAME (for Calendar Source)
-======================================================================
+  <div id="lane1">
+  
+  <div class="card">
+    <div class="sec">CAPACITY METRICS</div>
+    <table><colgroup><col style="width:200px"><col span="14"></colgroup>
+      <thead><tr><th></th><th class="col-date past day-clickable" title="Click for details" onclick="showDayDetail('2026-05-07')">THU<br>05/07</th><th class="col-date past day-clickable" title="Click for details" onclick="showDayDetail('2026-05-08')">FRI<br>05/08</th><th class="col-date past day-clickable" title="Click for details" onclick="showDayDetail('2026-05-09')">SAT<br>05/09</th><th class="col-date past day-clickable" title="Click for details" onclick="showDayDetail('2026-05-10')">SUN<br>05/10</th><th class="col-date today day-clickable" title="Click for details" onclick="showDayDetail('2026-05-11')">► TODAY<br>05/11</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-12')">TUE<br>05/12</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-13')">WED<br>05/13</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-14')">THU<br>05/14</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-15')">FRI<br>05/15</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-16')">SAT<br>05/16</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-17')">SUN<br>05/17</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-18')">MON<br>05/18</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-19')">TUE<br>05/19</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-20')">WED<br>05/20</th></tr></thead>
+      <tbody>
+        <tr><td class="metric">Calendar Availability</td><td class="num past">42</td><td class="num past">42</td><td class="num past">–</td><td class="num past">–</td><td class="num today">42</td><td class="num">33</td><td class="num">75</td><td class="num">69</td><td class="num">37</td><td class="num">–</td><td class="num">–</td><td class="num">36</td><td class="num">42</td><td class="num">42</td></tr>
+        <tr><td class="metric">Booked</td><td class="num booked past">19</td><td class="num booked past">20</td><td class="num booked past">3</td><td class="num zero past">0</td><td class="num booked today">13</td><td class="num booked">29</td><td class="num booked">19</td><td class="num booked">6</td><td class="num booked">3</td><td class="num zero">0</td><td class="num zero">0</td><td class="num booked">3</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+        <tr><td class="metric">Open Availability</td><td class="num past">23</td><td class="num past">22</td><td class="num past">–</td><td class="num past">–</td><td class="num today">29</td><td class="num">4</td><td class="num">56</td><td class="num">63</td><td class="num">34</td><td class="num">–</td><td class="num">–</td><td class="num">33</td><td class="num">42</td><td class="num">42</td></tr>
+        <tr><td class="metric">Calendar Capacity</td><td class="num util-mid past">45.2%</td><td class="num util-mid past">47.6%</td><td class="num past">N/A</td><td class="num past">N/A</td><td class="num util-low today">31.0%</td><td class="num util-high">87.9%</td><td class="num util-low">25.3%</td><td class="num util-low">8.7%</td><td class="num util-low">8.1%</td><td class="num">N/A</td><td class="num">N/A</td><td class="num util-low">8.3%</td><td class="num util-low">0.0%</td><td class="num util-low">0.0%</td></tr>
+      </tbody>
+    </table>
+  </div>
 
-   70 total events today:
-    31x Vending Route Consultation
-    10x Vending Strategy Call with Vendingpreneurs
-     7x Vendingprenuers Consultation
-     5x Vending Accelerator Call
-     4x Cash-Flowing Vending Route Advisory Interview
-     4x Vending Quick Discovery
-     3x Acquisition Ace Strategy Call
-     3x New Vendingpreneur Strategy Call
-     1x 30 Minute Meeting
-     1x Vendingpreneurs Rescheduled Call
-     1x Vendingpreneurs Follow-Up
+  <div class="card">
+    
+    <div class="sec">FUNNEL BREAKDOWN — EXTERNAL</div>
+    <table><colgroup><col style="width:200px"><col span="14"></colgroup>
+      <tbody><tr><td class="label">Low Ticket Funnel</td><td class="num has-count past">1/19</td><td class="num has-count past">2/19</td><td class="num zero past">0/19</td><td class="num zero past">0/19</td><td class="num has-count today">2/19</td><td class="num has-count">1/19</td><td class="num has-count">1/19</td><td class="num zero">0/19</td><td class="num zero">0/19</td><td class="num zero">0/19</td><td class="num zero">0/19</td><td class="num zero">0/19</td><td class="num zero">0/19</td><td class="num zero">0/19</td></tr>
+<tr><td class="label">LTF - Quiz Funnel</td><td class="num has-count past">1</td><td class="num has-count past">7</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="label">Instagram</td><td class="num has-count past">11/11</td><td class="num has-count past">3/11</td><td class="num has-count past">2/11</td><td class="num zero past">0/11</td><td class="num has-count today">8/11</td><td class="num has-count">6/11</td><td class="num has-count">6/11</td><td class="num has-count">3/11</td><td class="num has-count">1/11</td><td class="num zero">0/11</td><td class="num zero">0/11</td><td class="num has-count">1/11</td><td class="num zero">0/11</td><td class="num zero">0/11</td></tr>
+<tr><td class="label">X</td><td class="num has-count past">1/1</td><td class="num zero past">0/1</td><td class="num zero past">0/1</td><td class="num zero past">0/1</td><td class="num zero today">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num has-count">1/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td></tr>
+</tbody>
+    </table>
+    <div class="sec">FUNNEL BREAKDOWN — IN-HOUSE</div>
+    <table><colgroup><col style="width:200px"><col span="14"></colgroup>
+      <tbody><tr><td class="label">YouTube</td><td class="num has-count past">2/6</td><td class="num has-count past">2/6</td><td class="num zero past">0/6</td><td class="num zero past">0/6</td><td class="num has-count today">2/6</td><td class="num has-count">1/6</td><td class="num has-count">2/6</td><td class="num zero">0/6</td><td class="num zero">0/6</td><td class="num zero">0/6</td><td class="num zero">0/6</td><td class="num zero">0/6</td><td class="num zero">0/6</td><td class="num zero">0/6</td></tr>
+<tr><td class="label">Meta Ads</td><td class="num has-count past">1/2</td><td class="num has-count past">2/2</td><td class="num has-count past">1/2</td><td class="num zero past">0/2</td><td class="num zero today">0/2</td><td class="num zero">0/2</td><td class="num zero">0/2</td><td class="num zero">0/2</td><td class="num zero">0/2</td><td class="num zero">0/2</td><td class="num zero">0/2</td><td class="num zero">0/2</td><td class="num zero">0/2</td><td class="num zero">0/2</td></tr>
+<tr><td class="label">VSL</td><td class="num zero past">0/5</td><td class="num has-count past">1/5</td><td class="num zero past">0/5</td><td class="num zero past">0/5</td><td class="num zero today">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td></tr>
+<tr><td class="label">Website</td><td class="num has-count past">2/5</td><td class="num has-count past">1/5</td><td class="num zero past">0/5</td><td class="num zero past">0/5</td><td class="num zero today">0/5</td><td class="num has-count">2/5</td><td class="num zero">0/5</td><td class="num has-count">1/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td></tr>
+<tr><td class="label">Internal Webinar</td><td class="num zero past">0/3</td><td class="num has-count past">2/3</td><td class="num zero past">0/3</td><td class="num zero past">0/3</td><td class="num has-count today">1/3</td><td class="num has-count">4/3</td><td class="num has-count">2/3</td><td class="num zero">0/3</td><td class="num zero">0/3</td><td class="num zero">0/3</td><td class="num zero">0/3</td><td class="num zero">0/3</td><td class="num zero">0/3</td><td class="num zero">0/3</td></tr>
+<tr><td class="label">Side Hustle Nation/WWWS</td><td class="num zero past">0/1</td><td class="num zero past">0/1</td><td class="num zero past">0/1</td><td class="num zero past">0/1</td><td class="num zero today">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num has-count">1/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td></tr>
+<tr><td class="label">Reactivation Scrapers</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num has-count">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+</tbody>
+    </table>
+    <div class="sec">FUNNEL BREAKDOWN — UNCATEGORIZED</div>
+    <table><colgroup><col style="width:200px"><col span="14"></colgroup>
+      <tbody><tr><td class="label">Unknown (Needs Review)</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num has-count">15</td><td class="num has-count">8</td><td class="num has-count">1</td><td class="num has-count">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num has-count">1</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+</tbody>
+    </table>
+    <table><colgroup><col style="width:200px"><col span="14"></colgroup>
+      <tbody>
+        <tr class="total-row"><td class="metric">TOTAL</td><td class="num total-num past">19</td><td class="num total-num past">20</td><td class="num total-num past">3</td><td class="num total-num past">0</td><td class="num total-num today">13</td><td class="num total-num">29</td><td class="num total-num">19</td><td class="num total-num">6</td><td class="num total-num">3</td><td class="num total-num">0</td><td class="num total-num">0</td><td class="num total-num">3</td><td class="num total-num">0</td><td class="num total-num">0</td></tr>
+      </tbody>
+    </table>
+  </div>
 
-======================================================================
-SECTION 4: TOMORROW'S EVENTS BY CALENDAR NAME (2026-05-12)
-======================================================================
+  <div class="ltf-collapsible">
+    <details>
+      <summary>Rep Details — Chris: 31 · Eric: 4 · Jake: 18 · Robin: 28 · Scott: 27 · Christian: 7</summary>
+      <div class="card" style="margin-top:0.5rem;">
+        <table><colgroup><col style="width:200px"><col span="14"></colgroup>
+          <tbody>
+            <tr><td class="metric" style="font-weight:700;padding-top:0.5rem;">Chris Wanke</td><td class="num ltf-total past">5</td><td class="num ltf-total past">5</td><td class="num ltf-total past">1</td><td class="num zero past">0</td><td class="num ltf-total today">3</td><td class="num ltf-total">7</td><td class="num ltf-total">6</td><td class="num ltf-total">2</td><td class="num ltf-total">2</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Instagram</td><td class="num past">3</td><td class="num past">1</td><td class="num past">1</td><td class="num zero past">0</td><td class="num today">3</td><td class="num">1</td><td class="num">4</td><td class="num">1</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Internal Webinar</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Low Ticket Funnel</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Meta Ads</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Reactivation Scrapers</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Unknown (Needs Review)</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">3</td><td class="num">1</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Website</td><td class="num past">1</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">2</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">X</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">YouTube</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr style="border-top:2px solid #e0e0e0;"><td class="metric" style="font-weight:700;padding-top:0.5rem;">Eric Piccione</td><td class="num ltf-total past">2</td><td class="num ltf-total past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num ltf-total">1</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Instagram</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">LTF - Quiz Funnel</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Unknown (Needs Review)</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">YouTube</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr style="border-top:2px solid #e0e0e0;"><td class="metric" style="font-weight:700;padding-top:0.5rem;">Jake Skinner</td><td class="num ltf-total past">3</td><td class="num ltf-total past">2</td><td class="num ltf-total past">2</td><td class="num zero past">0</td><td class="num ltf-total today">1</td><td class="num ltf-total">5</td><td class="num ltf-total">3</td><td class="num ltf-total">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num ltf-total">1</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Instagram</td><td class="num past">2</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Internal Webinar</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">LTF - Quiz Funnel</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Meta Ads</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Side Hustle Nation/WWWS</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Unknown (Needs Review)</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">3</td><td class="num">2</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Website</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">YouTube</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr style="border-top:2px solid #e0e0e0;"><td class="metric" style="font-weight:700;padding-top:0.5rem;">Robin Perkins</td><td class="num ltf-total past">4</td><td class="num ltf-total past">6</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num ltf-total today">4</td><td class="num ltf-total">7</td><td class="num ltf-total">6</td><td class="num ltf-total">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Instagram</td><td class="num past">2</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num">1</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Internal Webinar</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num">2</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">LTF - Quiz Funnel</td><td class="num zero past">0</td><td class="num past">2</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Low Ticket Funnel</td><td class="num past">1</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Meta Ads</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Unknown (Needs Review)</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">4</td><td class="num">4</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">VSL</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">X</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">YouTube</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr style="border-top:2px solid #e0e0e0;"><td class="metric" style="font-weight:700;padding-top:0.5rem;">Scott Seymour</td><td class="num ltf-total past">5</td><td class="num ltf-total past">6</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num ltf-total today">5</td><td class="num ltf-total">4</td><td class="num ltf-total">3</td><td class="num ltf-total">2</td><td class="num ltf-total">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num ltf-total">1</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Instagram</td><td class="num past">3</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">4</td><td class="num">2</td><td class="num">1</td><td class="num">2</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Internal Webinar</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">LTF - Quiz Funnel</td><td class="num past">1</td><td class="num past">3</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Low Ticket Funnel</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Meta Ads</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Unknown (Needs Review)</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">1</td><td class="num">1</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">YouTube</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr style="border-top:2px solid #e0e0e0;"><td class="metric" style="font-weight:700;padding-top:0.5rem;">Christian Hartwell <span style="background:#2563eb;color:#fff;font-size:0.6rem;padding:1px 6px;border-radius:3px;margin-left:4px;">Lead</span></td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num ltf-total">6</td><td class="num ltf-total">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Instagram</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Internal Webinar</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Low Ticket Funnel</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Unknown (Needs Review)</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">4</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
 
-   97 total events tomorrow:
-    40x Vending Route Consultation
-    18x Vendingprenuers Consultation
-    10x Vending Strategy Call with Vendingpreneurs
-     9x Vending Accelerator Call
-     4x Acquisition Ace Strategy Call
-     4x New Vendingpreneur Strategy Call
-     3x Vending Quick Discovery
-     3x Vendingpreneurs Rescheduled Call
-     2x Vendingpreneurs Onboarding Call
-     2x Cash-Flowing Vending Route Advisory Interview
-     1x 30 Minute Meeting
-     1x Vendingpreneurs Follow-Up
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+  </div>
 
-======================================================================
-TEST v5 COMPLETE
-======================================================================</pre>
+  <div id="lane2" style="display:none;">
+  
+  <div class="card">
+    <div class="sec">CAPACITY METRICS</div>
+    <table><colgroup><col style="width:200px"><col span="14"></colgroup>
+      <thead><tr><th></th><th class="col-date past day-clickable" title="Click for details" onclick="showDayDetail('2026-05-07')">THU<br>05/07</th><th class="col-date past day-clickable" title="Click for details" onclick="showDayDetail('2026-05-08')">FRI<br>05/08</th><th class="col-date past day-clickable" title="Click for details" onclick="showDayDetail('2026-05-09')">SAT<br>05/09</th><th class="col-date past day-clickable" title="Click for details" onclick="showDayDetail('2026-05-10')">SUN<br>05/10</th><th class="col-date today day-clickable" title="Click for details" onclick="showDayDetail('2026-05-11')">► TODAY<br>05/11</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-12')">TUE<br>05/12</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-13')">WED<br>05/13</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-14')">THU<br>05/14</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-15')">FRI<br>05/15</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-16')">SAT<br>05/16</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-17')">SUN<br>05/17</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-18')">MON<br>05/18</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-19')">TUE<br>05/19</th><th class="col-date day-clickable" title="Click for details" onclick="showDayDetail('2026-05-20')">WED<br>05/20</th></tr></thead>
+      <tbody>
+        <tr><td class="metric">Calendar Availability</td><td class="num past">–</td><td class="num past">–</td><td class="num past">–</td><td class="num past">–</td><td class="num today">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td></tr>
+        <tr><td class="metric">Booked</td><td class="num booked past">43</td><td class="num booked past">36</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num booked today">43</td><td class="num booked">49</td><td class="num booked">67</td><td class="num booked">6</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+        <tr><td class="metric">Open Availability</td><td class="num past">–</td><td class="num past">–</td><td class="num past">–</td><td class="num past">–</td><td class="num today">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td></tr>
+        <tr><td class="metric">Calendar Capacity</td><td class="num past">N/A</td><td class="num past">N/A</td><td class="num past">N/A</td><td class="num past">N/A</td><td class="num today">N/A</td><td class="num">N/A</td><td class="num">N/A</td><td class="num">N/A</td><td class="num">N/A</td><td class="num">N/A</td><td class="num">N/A</td><td class="num">N/A</td><td class="num">N/A</td><td class="num">N/A</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    
+    <div class="sec">FUNNEL BREAKDOWN — EXTERNAL</div>
+    <table><colgroup><col style="width:200px"><col span="14"></colgroup>
+      <tbody><tr><td class="label">Low Ticket Funnel</td><td class="num has-count past">3/19</td><td class="num has-count past">2/19</td><td class="num zero past">0/19</td><td class="num zero past">0/19</td><td class="num has-count today">1/19</td><td class="num has-count">6/19</td><td class="num has-count">1/19</td><td class="num zero">0/19</td><td class="num zero">0/19</td><td class="num zero">0/19</td><td class="num zero">0/19</td><td class="num zero">0/19</td><td class="num zero">0/19</td><td class="num zero">0/19</td></tr>
+<tr><td class="label">LTF - Quiz Funnel</td><td class="num has-count past">23</td><td class="num has-count past">14</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num has-count today">27</td><td class="num has-count">5</td><td class="num has-count">1</td><td class="num has-count">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="label">Instagram</td><td class="num has-count past">5/11</td><td class="num has-count past">10/11</td><td class="num zero past">0/11</td><td class="num zero past">0/11</td><td class="num has-count today">6/11</td><td class="num zero">0/11</td><td class="num zero">0/11</td><td class="num zero">0/11</td><td class="num zero">0/11</td><td class="num zero">0/11</td><td class="num zero">0/11</td><td class="num zero">0/11</td><td class="num zero">0/11</td><td class="num zero">0/11</td></tr>
+<tr><td class="label">X</td><td class="num zero past">0/1</td><td class="num has-count past">1/1</td><td class="num zero past">0/1</td><td class="num zero past">0/1</td><td class="num has-count today">1/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td></tr>
+<tr><td class="label">Linkedin</td><td class="num zero past">0/1</td><td class="num has-count past">1/1</td><td class="num zero past">0/1</td><td class="num zero past">0/1</td><td class="num zero today">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td><td class="num zero">0/1</td></tr>
+</tbody>
+    </table>
+    <div class="sec">FUNNEL BREAKDOWN — IN-HOUSE</div>
+    <table><colgroup><col style="width:200px"><col span="14"></colgroup>
+      <tbody><tr><td class="label">YouTube</td><td class="num has-count past">3/6</td><td class="num has-count past">1/6</td><td class="num zero past">0/6</td><td class="num zero past">0/6</td><td class="num has-count today">3/6</td><td class="num has-count">1/6</td><td class="num zero">0/6</td><td class="num zero">0/6</td><td class="num zero">0/6</td><td class="num zero">0/6</td><td class="num zero">0/6</td><td class="num zero">0/6</td><td class="num zero">0/6</td><td class="num zero">0/6</td></tr>
+<tr><td class="label">VSL</td><td class="num zero past">0/5</td><td class="num zero past">0/5</td><td class="num zero past">0/5</td><td class="num zero past">0/5</td><td class="num zero today">0/5</td><td class="num has-count">1/5</td><td class="num has-count">1/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td></tr>
+<tr><td class="label">Website</td><td class="num has-count past">6/5</td><td class="num has-count past">1/5</td><td class="num zero past">0/5</td><td class="num zero past">0/5</td><td class="num has-count today">1/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td><td class="num zero">0/5</td></tr>
+<tr><td class="label">Internal Webinar</td><td class="num has-count past">3/3</td><td class="num has-count past">3/3</td><td class="num zero past">0/3</td><td class="num zero past">0/3</td><td class="num has-count today">1/3</td><td class="num zero">0/3</td><td class="num has-count">1/3</td><td class="num has-count">1/3</td><td class="num zero">0/3</td><td class="num zero">0/3</td><td class="num zero">0/3</td><td class="num zero">0/3</td><td class="num zero">0/3</td><td class="num zero">0/3</td></tr>
+<tr><td class="label">Reactivation Email</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num has-count">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+</tbody>
+    </table>
+    <div class="sec">FUNNEL BREAKDOWN — UNCATEGORIZED</div>
+    <table><colgroup><col style="width:200px"><col span="14"></colgroup>
+      <tbody><tr><td class="label">Unknown (Needs Review)</td><td class="num zero past">0</td><td class="num has-count past">3</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num has-count today">3</td><td class="num has-count">36</td><td class="num has-count">62</td><td class="num has-count">4</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+</tbody>
+    </table>
+    <table><colgroup><col style="width:200px"><col span="14"></colgroup>
+      <tbody>
+        <tr class="total-row"><td class="metric">TOTAL</td><td class="num total-num past">43</td><td class="num total-num past">36</td><td class="num total-num past">0</td><td class="num total-num past">0</td><td class="num total-num today">43</td><td class="num total-num">49</td><td class="num total-num">67</td><td class="num total-num">6</td><td class="num total-num">0</td><td class="num total-num">0</td><td class="num total-num">0</td><td class="num total-num">0</td><td class="num total-num">0</td><td class="num total-num">0</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="ltf-collapsible">
+    <details>
+      <summary>Rep Details — Bryan: 45 · Elvis: 25 · John: 28 · Kelly: 41 · Lyle: 27 · Steven: 42 · Jason: 36</summary>
+      <div class="card" style="margin-top:0.5rem;">
+        <table><colgroup><col style="width:200px"><col span="14"></colgroup>
+          <tbody>
+            <tr><td class="metric" style="font-weight:700;padding-top:0.5rem;">Bryan Barcus</td><td class="num ltf-total past">7</td><td class="num ltf-total past">8</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num ltf-total today">7</td><td class="num ltf-total">10</td><td class="num ltf-total">12</td><td class="num ltf-total">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Instagram</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Internal Webinar</td><td class="num past">1</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">LTF - Quiz Funnel</td><td class="num past">5</td><td class="num past">4</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">6</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Low Ticket Funnel</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">3</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Unknown (Needs Review)</td><td class="num zero past">0</td><td class="num past">3</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">7</td><td class="num">11</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">VSL</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr style="border-top:2px solid #e0e0e0;"><td class="metric" style="font-weight:700;padding-top:0.5rem;">Cameron Caswell</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr style="border-top:2px solid #e0e0e0;"><td class="metric" style="font-weight:700;padding-top:0.5rem;">Elvis Ellis</td><td class="num ltf-total past">4</td><td class="num ltf-total past">5</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num ltf-total today">6</td><td class="num ltf-total">4</td><td class="num ltf-total">5</td><td class="num ltf-total">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Instagram</td><td class="num zero past">0</td><td class="num past">2</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Internal Webinar</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">LTF - Quiz Funnel</td><td class="num past">2</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Low Ticket Funnel</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Unknown (Needs Review)</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num">2</td><td class="num">5</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Website</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">X</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">YouTube</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr style="border-top:2px solid #e0e0e0;"><td class="metric" style="font-weight:700;padding-top:0.5rem;">John Kirk</td><td class="num ltf-total past">8</td><td class="num ltf-total past">4</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num ltf-total today">5</td><td class="num ltf-total">4</td><td class="num ltf-total">5</td><td class="num ltf-total">2</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Instagram</td><td class="num past">1</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Internal Webinar</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">LTF - Quiz Funnel</td><td class="num past">4</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">3</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Low Ticket Funnel</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Unknown (Needs Review)</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">4</td><td class="num">4</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Website</td><td class="num past">2</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">YouTube</td><td class="num past">1</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr style="border-top:2px solid #e0e0e0;"><td class="metric" style="font-weight:700;padding-top:0.5rem;">Kelly Schrader</td><td class="num ltf-total past">7</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num ltf-total today">9</td><td class="num ltf-total">11</td><td class="num ltf-total">14</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Instagram</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Internal Webinar</td><td class="num past">2</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">LTF - Quiz Funnel</td><td class="num past">3</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">6</td><td class="num">2</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Low Ticket Funnel</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">1</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Unknown (Needs Review)</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num">8</td><td class="num">12</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">YouTube</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr style="border-top:2px solid #e0e0e0;"><td class="metric" style="font-weight:700;padding-top:0.5rem;">Lyle Hubbard</td><td class="num ltf-total past">6</td><td class="num ltf-total past">5</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num ltf-total today">3</td><td class="num ltf-total">6</td><td class="num ltf-total">7</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Instagram</td><td class="num past">1</td><td class="num past">2</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">LTF - Quiz Funnel</td><td class="num past">1</td><td class="num past">2</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">3</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Unknown (Needs Review)</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">5</td><td class="num">7</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Website</td><td class="num past">3</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">YouTube</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr style="border-top:2px solid #e0e0e0;"><td class="metric" style="font-weight:700;padding-top:0.5rem;">Steven Starnes</td><td class="num ltf-total past">8</td><td class="num ltf-total past">8</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num ltf-total today">7</td><td class="num ltf-total">7</td><td class="num ltf-total">12</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Instagram</td><td class="num past">2</td><td class="num past">3</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">3</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Internal Webinar</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">LTF - Quiz Funnel</td><td class="num past">5</td><td class="num past">2</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">3</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Linkedin</td><td class="num zero past">0</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Low Ticket Funnel</td><td class="num past">1</td><td class="num past">1</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Reactivation Email</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Unknown (Needs Review)</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num">6</td><td class="num">11</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr style="border-top:2px solid #e0e0e0;"><td class="metric" style="font-weight:700;padding-top:0.5rem;">Jason Aaron <span style="background:#2563eb;color:#fff;font-size:0.6rem;padding:1px 6px;border-radius:3px;margin-left:4px;">Lead</span></td><td class="num ltf-total past">3</td><td class="num ltf-total past">6</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num ltf-total today">6</td><td class="num ltf-total">7</td><td class="num ltf-total">12</td><td class="num ltf-total">2</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Instagram</td><td class="num zero past">0</td><td class="num past">2</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">LTF - Quiz Funnel</td><td class="num past">3</td><td class="num past">4</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">5</td><td class="num">1</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Low Ticket Funnel</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">Unknown (Needs Review)</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">4</td><td class="num">12</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">VSL</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero today">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+<tr><td class="metric" style="padding-left:1.2rem;font-size:0.72rem;color:#555;">YouTube</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num zero past">0</td><td class="num today">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td></tr>
+
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+  </div>
+
+  <div class="footer">
+    <span>Source: First Sales Call Booked Date field · <a href="archive.html">📁 Archive</a></span>
+    <a href="https://stephenolivas.github.io/mtd-funnel-dashboard/" target="_blank">📊 MTD Funnel Reporting →</a>
+  </div>
+</div>
+
+<!-- Day Detail Panel -->
+<div id="dayOverlay" class="day-panel-overlay" onclick="closeDayPanel()"></div>
+<div id="dayPanel" class="day-panel">
+  <button class="dp-close" onclick="closeDayPanel()">✕</button>
+  <div class="dp-title"></div>
+  <div class="dp-subtitle"></div>
+
+  <div class="dp-section">Funnel Breakdown</div>
+  <div id="dpFunnels"></div>
+
+  <div class="dp-section">Rep Breakdown</div>
+  <div id="dpReps"></div>
+
+  <div class="dp-section">Calendar Source</div>
+  <div id="dpCalSource"></div>
+
+  <div class="dp-section">When Booked</div>
+  <div id="dpBooked"></div>
+</div>
+
+
+    <script>
+    var _activeLane = 1;
+    var _dayDetail = {"lane1": {"2026-05-07": {"total": 19, "funnels": [["Instagram", 11, 58], ["YouTube", 2, 11], ["Website", 2, 11], ["Meta Ads", 1, 5], ["Other", 3, 16]], "reps": [["Scott Seymour", 5], ["Chris Wanke", 5], ["Robin Perkins", 4], ["Jake Skinner", 3], ["Eric Piccione", 2]], "booked_on": [["2026-04-29", 1, 5], ["2026-05-01", 1, 5], ["2026-05-02", 2, 11], ["2026-05-03", 3, 16], ["2026-05-05", 2, 11], ["2026-05-06", 5, 26], ["2026-05-07", 5, 26]], "calendar_source": [["Vending Route Consultation", 30, 38], ["Vending Strategy Call with Vendingpreneurs", 20, 26], ["Vendingprenuers Consultation", 16, 21], ["Acquisition Ace Strategy Call", 5, 6], ["New Vendingpreneur Strategy Call", 3, 4], ["30 Minute Meeting", 1, 1], ["Vendingpreneurs Rescheduled Call", 1, 1], ["Vending Quick Discovery", 1, 1], ["Vendingpreneurs Follow-Up", 1, 1]]}, "2026-05-12": {"total": 29, "funnels": [["Unknown (Needs Review)", 15, 52], ["Instagram", 6, 21], ["Internal Webinar", 4, 14], ["Website", 2, 7], ["Other", 2, 7]], "reps": [["Chris Wanke", 7], ["Robin Perkins", 7], ["Christian Hartwell", 6], ["Jake Skinner", 5], ["Scott Seymour", 4]], "booked_on": [["2026-05-07", 6, 21], ["2026-05-08", 6, 21], ["2026-05-09", 8, 28], ["2026-05-10", 5, 17], ["2026-05-11", 4, 14]], "calendar_source": [["Vending Route Consultation", 40, 41], ["Vendingprenuers Consultation", 17, 18], ["Vending Strategy Call with Vendingpreneurs", 10, 10], ["Vending Accelerator Call", 10, 10], ["Acquisition Ace Strategy Call", 4, 4], ["New Vendingpreneur Strategy Call", 4, 4], ["Vending Quick Discovery", 3, 3], ["Vendingpreneurs Rescheduled Call", 3, 3], ["Vendingpreneurs Onboarding Call", 2, 2], ["Cash-Flowing Vending Route Advisory Interview", 2, 2], ["30 Minute Meeting", 1, 1], ["Vendingpreneurs Follow-Up", 1, 1]]}, "2026-05-11": {"total": 13, "funnels": [["Instagram", 8, 62], ["YouTube", 2, 15], ["Low Ticket Funnel", 2, 15], ["Internal Webinar", 1, 8]], "reps": [["Scott Seymour", 5], ["Robin Perkins", 4], ["Chris Wanke", 3], ["Jake Skinner", 1]], "booked_on": [["2026-05-07", 8, 62], ["2026-05-08", 2, 15], ["2026-05-09", 1, 8], ["2026-05-11", 2, 15]], "calendar_source": [["Vending Route Consultation", 31, 44], ["Vending Strategy Call with Vendingpreneurs", 10, 14], ["Vendingprenuers Consultation", 7, 10], ["Vending Accelerator Call", 5, 7], ["Cash-Flowing Vending Route Advisory Interview", 4, 6], ["Vending Quick Discovery", 4, 6], ["Acquisition Ace Strategy Call", 3, 4], ["New Vendingpreneur Strategy Call", 3, 4], ["30 Minute Meeting", 1, 1], ["Vendingpreneurs Rescheduled Call", 1, 1], ["Vendingpreneurs Follow-Up", 1, 1]]}, "2026-05-18": {"total": 3, "funnels": [["Instagram", 1, 33], ["Unknown (Needs Review)", 1, 33], ["Side Hustle Nation/WWWS", 1, 33]], "reps": [["Scott Seymour", 1], ["Eric Piccione", 1], ["Jake Skinner", 1]], "booked_on": [["2026-05-07", 1, 33], ["2026-05-11", 2, 67]], "calendar_source": [["Vending Accelerator Call", 1, 33], ["New Vendingpreneur Strategy Call", 1, 33], ["Vendingprenuers Consultation", 1, 33]]}, "2026-05-08": {"total": 20, "funnels": [["LTF - Quiz Funnel", 7, 35], ["Instagram", 3, 15], ["YouTube", 2, 10], ["Low Ticket Funnel", 2, 10], ["Other", 6, 30]], "reps": [["Scott Seymour", 6], ["Robin Perkins", 6], ["Chris Wanke", 5], ["Jake Skinner", 2], ["Eric Piccione", 1]], "booked_on": [["2026-05-01", 1, 5], ["2026-05-03", 7, 35], ["2026-05-04", 2, 10], ["2026-05-06", 3, 15], ["2026-05-07", 4, 20], ["2026-05-08", 3, 15]], "calendar_source": [["Vending Route Consultation", 22, 33], ["Vending Strategy Call with Vendingpreneurs", 15, 22], ["Vendingprenuers Consultation", 15, 22], ["Vending Quick Discovery", 4, 6], ["Acquisition Ace Strategy Call", 4, 6], ["New Vendingpreneur Strategy Call", 3, 4], ["Cash-Flowing Vending Route Advisory Interview", 2, 3], ["Getting Started with VP", 1, 1], ["Vendingpreneurs Rescheduled Call", 1, 1]]}, "2026-05-13": {"total": 19, "funnels": [["Unknown (Needs Review)", 8, 42], ["Instagram", 6, 32], ["YouTube", 2, 11], ["Internal Webinar", 2, 11], ["Other", 1, 5]], "reps": [["Robin Perkins", 6], ["Chris Wanke", 6], ["Jake Skinner", 3], ["Scott Seymour", 3], ["Christian Hartwell", 1]], "booked_on": [["2026-05-08", 2, 11], ["2026-05-09", 7, 37], ["2026-05-10", 4, 21], ["2026-05-11", 6, 32]], "calendar_source": [["Vending Route Consultation", 62, 62], ["Vending Accelerator Call", 11, 11], ["Vending Strategy Call with Vendingpreneurs", 7, 7], ["Vendingprenuers Consultation", 6, 6], ["New Vendingpreneur Strategy Call", 5, 5], ["Vendingpreneurs Rescheduled Call", 2, 2], ["Cash-Flowing Vending Route Advisory Interview", 2, 2], ["Vending Quick Discovery", 2, 2], ["Acquisition Ace Strategy Call", 1, 1], ["Vendingpreneurs Follow-Up", 1, 1], ["Vendingpreneurs Onboarding Call", 1, 1]]}, "2026-05-14": {"total": 6, "funnels": [["Instagram", 3, 50], ["Unknown (Needs Review)", 1, 17], ["X", 1, 17], ["Website", 1, 17]], "reps": [["Chris Wanke", 2], ["Scott Seymour", 2], ["Robin Perkins", 1], ["Jake Skinner", 1]], "booked_on": [["2026-05-07", 1, 17], ["2026-05-08", 1, 17], ["2026-05-10", 2, 33], ["2026-05-11", 2, 33]], "calendar_source": [["Vending Route Consultation", 6, 30], ["New Vendingpreneur Strategy Call", 5, 25], ["Vending Accelerator Call", 4, 20], ["Vending Quick Discovery", 2, 10], ["Vendingpreneurs Rescheduled Call", 1, 5], ["Vendingpreneurs Follow-Up", 1, 5], ["Vendingpreneur Next Steps", 1, 5]]}, "2026-05-09": {"total": 3, "funnels": [["Instagram", 2, 67], ["Meta Ads", 1, 33]], "reps": [["Jake Skinner", 2], ["Chris Wanke", 1]], "booked_on": [["2026-04-27", 1, 33], ["2026-05-04", 1, 33], ["2026-05-05", 1, 33]], "calendar_source": [["Vendingpreneurs Onboarding Call", 1, 33], ["New Vendingpreneur Strategy Call", 1, 33], ["Vendingprenuers Consultation", 1, 33]]}, "2026-05-15": {"total": 3, "funnels": [["Reactivation Scrapers", 1, 33], ["Unknown (Needs Review)", 1, 33], ["Instagram", 1, 33]], "reps": [["Chris Wanke", 2], ["Scott Seymour", 1]], "booked_on": [["2026-05-09", 1, 33], ["2026-05-10", 2, 67]], "calendar_source": [["Vendingpreneurs Rescheduled Call", 5, 50], ["Vending Accelerator Call", 2, 20], ["New Vendingpreneur Strategy Call", 2, 20], ["Acquisition Ace Strategy Call", 1, 10]]}}, "lane2": {"2026-05-11": {"total": 43, "funnels": [["LTF - Quiz Funnel", 27, 63], ["Instagram", 6, 14], ["YouTube", 3, 7], ["Unknown (Needs Review)", 3, 7], ["Other", 4, 9]], "reps": [["Kelly Schrader", 9], ["Bryan Barcus", 7], ["Steven Starnes", 7], ["Elvis Ellis", 6], ["Jason Aaron", 6], ["John Kirk", 5], ["Lyle Hubbard", 3]], "booked_on": [["2026-05-07", 9, 21], ["2026-05-08", 22, 51], ["2026-05-09", 6, 14], ["2026-05-10", 6, 14]], "calendar_source": [["Vending Route Consultation", 31, 44], ["Vending Strategy Call with Vendingpreneurs", 10, 14], ["Vendingprenuers Consultation", 7, 10], ["Vending Accelerator Call", 5, 7], ["Cash-Flowing Vending Route Advisory Interview", 4, 6], ["Vending Quick Discovery", 4, 6], ["Acquisition Ace Strategy Call", 3, 4], ["New Vendingpreneur Strategy Call", 3, 4], ["30 Minute Meeting", 1, 1], ["Vendingpreneurs Rescheduled Call", 1, 1], ["Vendingpreneurs Follow-Up", 1, 1]]}, "2026-05-13": {"total": 67, "funnels": [["Unknown (Needs Review)", 62, 93], ["Reactivation Email", 1, 1], ["Low Ticket Funnel", 1, 1], ["VSL", 1, 1], ["Other", 2, 3]], "reps": [["Kelly Schrader", 14], ["Steven Starnes", 12], ["Bryan Barcus", 12], ["Jason Aaron", 12], ["Lyle Hubbard", 7], ["John Kirk", 5], ["Elvis Ellis", 5]], "booked_on": [["2026-05-06", 1, 1], ["2026-05-08", 10, 15], ["2026-05-09", 12, 18], ["2026-05-10", 21, 31], ["2026-05-11", 23, 34]], "calendar_source": [["Vending Route Consultation", 62, 62], ["Vending Accelerator Call", 11, 11], ["Vending Strategy Call with Vendingpreneurs", 7, 7], ["Vendingprenuers Consultation", 6, 6], ["New Vendingpreneur Strategy Call", 5, 5], ["Vendingpreneurs Rescheduled Call", 2, 2], ["Cash-Flowing Vending Route Advisory Interview", 2, 2], ["Vending Quick Discovery", 2, 2], ["Acquisition Ace Strategy Call", 1, 1], ["Vendingpreneurs Follow-Up", 1, 1], ["Vendingpreneurs Onboarding Call", 1, 1]]}, "2026-05-07": {"total": 43, "funnels": [["LTF - Quiz Funnel", 23, 53], ["Website", 6, 14], ["Instagram", 5, 12], ["Low Ticket Funnel", 3, 7], ["Other", 6, 14]], "reps": [["John Kirk", 8], ["Steven Starnes", 8], ["Kelly Schrader", 7], ["Bryan Barcus", 7], ["Lyle Hubbard", 6], ["Elvis Ellis", 4], ["Jason Aaron", 3]], "booked_on": [["2026-05-02", 7, 16], ["2026-05-03", 4, 9], ["2026-05-04", 1, 2], ["2026-05-05", 15, 35], ["2026-05-06", 7, 16], ["2026-05-07", 9, 21]], "calendar_source": [["Vending Route Consultation", 30, 38], ["Vending Strategy Call with Vendingpreneurs", 20, 26], ["Vendingprenuers Consultation", 16, 21], ["Acquisition Ace Strategy Call", 5, 6], ["New Vendingpreneur Strategy Call", 3, 4], ["30 Minute Meeting", 1, 1], ["Vendingpreneurs Rescheduled Call", 1, 1], ["Vending Quick Discovery", 1, 1], ["Vendingpreneurs Follow-Up", 1, 1]]}, "2026-05-08": {"total": 36, "funnels": [["LTF - Quiz Funnel", 14, 39], ["Instagram", 10, 28], ["Internal Webinar", 3, 8], ["Unknown (Needs Review)", 3, 8], ["Other", 6, 17]], "reps": [["Steven Starnes", 8], ["Bryan Barcus", 8], ["Jason Aaron", 6], ["Lyle Hubbard", 5], ["Elvis Ellis", 5], ["John Kirk", 4]], "booked_on": [["2026-05-03", 8, 22], ["2026-05-04", 3, 8], ["2026-05-05", 9, 25], ["2026-05-06", 9, 25], ["2026-05-07", 2, 6], ["2026-05-08", 4, 11], ["Unknown", 1, 3]], "calendar_source": [["Vending Route Consultation", 22, 33], ["Vending Strategy Call with Vendingpreneurs", 15, 22], ["Vendingprenuers Consultation", 15, 22], ["Vending Quick Discovery", 4, 6], ["Acquisition Ace Strategy Call", 4, 6], ["New Vendingpreneur Strategy Call", 3, 4], ["Cash-Flowing Vending Route Advisory Interview", 2, 3], ["Getting Started with VP", 1, 1], ["Vendingpreneurs Rescheduled Call", 1, 1]]}, "2026-05-14": {"total": 6, "funnels": [["Unknown (Needs Review)", 4, 67], ["Internal Webinar", 1, 17], ["LTF - Quiz Funnel", 1, 17]], "reps": [["John Kirk", 2], ["Jason Aaron", 2], ["Bryan Barcus", 1], ["Elvis Ellis", 1]], "booked_on": [["2026-05-09", 1, 17], ["2026-05-11", 5, 83]], "calendar_source": [["Vending Route Consultation", 6, 30], ["New Vendingpreneur Strategy Call", 5, 25], ["Vending Accelerator Call", 4, 20], ["Vending Quick Discovery", 2, 10], ["Vendingpreneurs Rescheduled Call", 1, 5], ["Vendingpreneurs Follow-Up", 1, 5], ["Vendingpreneur Next Steps", 1, 5]]}, "2026-05-12": {"total": 49, "funnels": [["Unknown (Needs Review)", 36, 73], ["Low Ticket Funnel", 6, 12], ["LTF - Quiz Funnel", 5, 10], ["YouTube", 1, 2], ["Other", 1, 2]], "reps": [["Kelly Schrader", 11], ["Bryan Barcus", 10], ["Jason Aaron", 7], ["Steven Starnes", 7], ["Lyle Hubbard", 6], ["Elvis Ellis", 4], ["John Kirk", 4]], "booked_on": [["2026-05-05", 1, 2], ["2026-05-07", 5, 10], ["2026-05-08", 11, 22], ["2026-05-09", 9, 18], ["2026-05-10", 18, 37], ["2026-05-11", 5, 10]], "calendar_source": [["Vending Route Consultation", 40, 41], ["Vendingprenuers Consultation", 17, 18], ["Vending Strategy Call with Vendingpreneurs", 10, 10], ["Vending Accelerator Call", 10, 10], ["Acquisition Ace Strategy Call", 4, 4], ["New Vendingpreneur Strategy Call", 4, 4], ["Vending Quick Discovery", 3, 3], ["Vendingpreneurs Rescheduled Call", 3, 3], ["Vendingpreneurs Onboarding Call", 2, 2], ["Cash-Flowing Vending Route Advisory Interview", 2, 2], ["30 Minute Meeting", 1, 1], ["Vendingpreneurs Follow-Up", 1, 1]]}}};
+
+    function showLane(n) {
+      _activeLane = n;
+      document.getElementById('lane1').style.display = n===1 ? 'block' : 'none';
+      document.getElementById('lane2').style.display = n===2 ? 'block' : 'none';
+      document.getElementById('btn1').className = 'lane-btn' + (n===1 ? ' active' : '');
+      document.getElementById('btn2').className = 'lane-btn' + (n===2 ? ' active' : '');
+      closeDayPanel();
+    }
+
+    function showDayDetail(dateStr) {
+      var laneKey = _activeLane === 1 ? 'lane1' : 'lane2';
+      var detail = _dayDetail[laneKey][dateStr];
+      if (!detail || detail.total === 0) return;
+
+      var panel = document.getElementById('dayPanel');
+      var overlay = document.getElementById('dayOverlay');
+
+      // Title
+      var d = new Date(dateStr + 'T12:00:00');
+      var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      panel.querySelector('.dp-title').textContent = days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate();
+      panel.querySelector('.dp-subtitle').textContent = detail.total + ' calls · Lane ' + _activeLane;
+
+      // Funnels
+      var funnelHtml = '';
+      var maxPct = Math.max.apply(null, detail.funnels.map(function(f){return f[2]}));
+      detail.funnels.forEach(function(f) {
+        var barW = maxPct > 0 ? (f[2] / maxPct * 100) : 0;
+        funnelHtml += '<div class="dp-bar-row">' +
+          '<span class="dp-bar-label">' + f[0] + '</span>' +
+          '<div class="dp-bar-track"><div class="dp-bar-fill" style="width:' + barW + '%"></div></div>' +
+          '<span class="dp-bar-val">' + f[1] + ' (' + f[2] + '%)</span></div>';
+      });
+      document.getElementById('dpFunnels').innerHTML = funnelHtml;
+
+      // Reps
+      var repHtml = '';
+      if (detail.reps) {
+        detail.reps.forEach(function(r) {
+          repHtml += '<div class="dp-rep-row"><span class="dp-rep-name">' + r[0] + '</span><span class="dp-rep-count">' + r[1] + '</span></div>';
+        });
+      }
+      document.getElementById('dpReps').innerHTML = repHtml;
+
+      // Calendar Source
+      var calHtml = '';
+      if (detail.calendar_source && detail.calendar_source.length > 0) {
+        calHtml = '<table class="dp-booked-table">';
+        detail.calendar_source.forEach(function(cs) {
+          calHtml += '<tr><td>' + cs[0] + '</td><td>' + cs[1] + '</td><td>' + cs[2] + '%</td></tr>';
+        });
+        calHtml += '</table>';
+      } else {
+        calHtml = '<div class="dp-coming-soon">No calendar data for this day</div>';
+      }
+      document.getElementById('dpCalSource').innerHTML = calHtml;
+
+      // Booked on
+      var bookedHtml = '<table class="dp-booked-table">';
+      if (detail.booked_on && detail.booked_on.length > 0) {
+        detail.booked_on.forEach(function(b) {
+          var label = b[0];
+          if (label !== 'Unknown') {
+            var bd = new Date(label + 'T12:00:00');
+            label = days[bd.getDay()] + ' ' + (bd.getMonth()+1) + '/' + bd.getDate();
+          }
+          bookedHtml += '<tr><td>' + label + '</td><td>' + b[1] + ' calls</td><td>' + b[2] + '%</td></tr>';
+        });
+      } else {
+        bookedHtml += '<tr><td colspan="3" style="color:#aaa;">No booking date data</td></tr>';
+      }
+      bookedHtml += '</table>';
+      document.getElementById('dpBooked').innerHTML = bookedHtml;
+
+      panel.style.display = 'block';
+      overlay.style.display = 'block';
+    }
+
+    function closeDayPanel() {
+      document.getElementById('dayPanel').style.display = 'none';
+      document.getElementById('dayOverlay').style.display = 'none';
+    }
+    </script>
+    
 </body></html>
