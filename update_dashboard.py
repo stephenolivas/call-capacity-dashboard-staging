@@ -299,6 +299,22 @@ ALL_LANE_REPS      = LANE_1_REPS | LANE_2_REPS
 ALL_LANE_REP_NAMES = {**LANE_2_REP_NAMES, **LANE_1_REP_NAMES}  # LANE_1 wins on Chris Wanke / LTF Quiz Calendar conflict
 ALL_LANE_LEAD      = LANE_1_LEAD  # Christian Hartwell continues as team lead badge
 
+# ── New-Calls-Only Reps (Lane 2 transition mode) ────────────────────────────
+# These reps' "Total Meetings" displays clamp to their "New Calls" count instead
+# of including follow-ups, reschedules, Q&A, etc. Affects two surfaces:
+#   1. Top-section "Total Meetings Booked" row (sums lane-wide)
+#   2. Rep Details "Total Calls" row (per-rep)
+# Reason: Lane 2 is evolving into a scraper-focused team taking self-sourced
+# calls; showing their full meeting volume creates more noise than signal for
+# sales/marketing leadership during this transition. Verified with head of sales.
+NEW_CALLS_ONLY_REPS = {
+    "user_I0cHZ04mBXXBvbFcnwmsc2KrcMsLsKxqjW8DtJ783Hr",  # Elvis Ellis
+    "user_WquWudQN7dghZsAPiNY80eJUmg1EadQg2UCQdvgbif7",  # Kelly Schrader
+    "user_UpJb11fzX2TuFHf7fFyWpfXr84lg2Ui7i7p5CtQkIaW",  # Cameron Caswell
+    "user_MrBLkl5wCqTm7QxHxPo2ydNV5KxMllg6YZDVc12Aqzj",  # Jason Aaron
+    "user_Bov31jjnHhENBy8uWNTTL8KKax8VX7o6DugLzBYOHBG",  # Lyle Hubbard
+}
+
 # ── Date-Based Lane Transitions ──────────────────────────────────────────────
 # Chris Wanke moves from Lane 1 to Lane 2 for calls booked on 05/18+
 # He appears in BOTH lane sets; the date-based filter handles which lane counts him.
@@ -371,6 +387,9 @@ ARCHIVE_DIR = os.environ.get("ARCHIVE_DIR", "archive")
 # Each entry: {"date": "YYYY-MM-DD HH:MM PT", "notes": ["bullet 1", "bullet 2"]}
 
 CHANGELOG_ENTRIES = [
+    {"date": "2026-06-16 11:30 AM PT", "notes": [
+        "Five Lane 2 reps (Elvis Ellis, Kelly Schrader, Cameron Caswell, Jason Aaron, Lyle Hubbard) now display only their NEW calls — their total meetings count clamps to equal their new-call count. Affects the top 'Total Meetings Booked' row and their individual 'Total Calls' row in Rep Details. Other reps unchanged. Transition mode while Lane 2 evolves into a scraper-focused team; verified with head of sales.",
+    ]},
     {"date": "2026-06-16 11:00 AM PT", "notes": [
         "Lane 1 / Lane 2 toggle removed — dashboard now shows a single combined team view. All call counting, funnel breakdowns, rep details, and Calendar Capacity metrics consolidate Lane 1 + Lane 2 reps into one. Context: Lane 2 has evolved into a scraper-focused team taking self-sourced calls; the split no longer reflects how the work actually flows.",
         "EOD email simplified to match — single team stats for New Meetings Today, Show Rate, and Meetings Set for Tomorrow (no more Lane 1 / Lane 2 columns).",
@@ -1144,6 +1163,21 @@ def build_dashboard_data(field_leads, dates, today=None, lane_reps=None, lane_la
     if lane_excluded > 0:
         log(f"   ⚠ Excluded {lane_excluded} leads (Lead Owner not in {lane_label})")
     log(f"   📊 {len(valid_meetings)} {lane_label} leads counted across window")
+
+    # Clamp Total Meetings for reps in NEW_CALLS_ONLY_REPS: their displayed total
+    # equals their new-calls count (sum of rep_data funnels) instead of the raw
+    # all-meetings count. Affects both the top-section "Total Meetings Booked" row
+    # and the per-rep "Total Calls" row in Rep Details.
+    # Mutates rep_total_meetings in place — fine since this is the only place
+    # downstream code reads from it for this build.
+    if rep_total_meetings:
+        for uid in NEW_CALLS_ONLY_REPS:
+            if uid not in rep_data:
+                continue
+            rep_total_meetings.setdefault(uid, {})
+            for d in dates:
+                new_calls_count = sum(rep_data[uid].get(d, {}).values())
+                rep_total_meetings[uid][d] = new_calls_count
 
     # Per-lane "Total Meetings Booked" count per date — sum of rep_total_meetings
     # filtered to user_ids in this lane. Mirrors how "Booked" is lane-filtered.
