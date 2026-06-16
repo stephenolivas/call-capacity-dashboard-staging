@@ -1207,11 +1207,12 @@ def build_dashboard_data(field_leads, dates, today=None, lane_reps=None, lane_la
                 new_calls_count = sum(rep_data[uid].get(d, {}).values())
                 rep_total_meetings[uid][d] = new_calls_count
 
-                # Apply matching clamp to categories: their displayed total is
-                # all "Other" (catch-all includes new calls). F/U + Resch zeroed out.
+                # Apply matching clamp to categories: their displayed total = their new
+                # calls only. Zero out F/U and Resch contributions. Their "other" is
+                # recomputed at team-level (see below), so the per-rep value is moot.
                 if rep_meetings_by_category is not None:
                     rep_meetings_by_category.setdefault(uid, {})[d] = {
-                        "fu": 0, "resch": 0, "other": new_calls_count,
+                        "fu": 0, "resch": 0, "other": 0,
                     }
 
     # Per-lane "Total Meetings Booked" count per date — sum of rep_total_meetings
@@ -1224,18 +1225,29 @@ def build_dashboard_data(field_leads, dates, today=None, lane_reps=None, lane_la
             if d in total_meetings_by_date:
                 total_meetings_by_date[d] += count
 
-    # Team-level F/U / Resch / Other counts per date — sum of rep_meetings_by_category
-    # filtered to user_ids in this lane. Mirrors total_meetings_by_date but split.
-    # Invariant: fu[d] + resch[d] + other[d] == total_meetings_by_date[d]
-    meetings_by_category_by_date = {d: {"fu": 0, "resch": 0, "other": 0} for d in dates}
-    for uid, dates_dict in (rep_meetings_by_category or {}).items():
-        if lane_reps and uid not in lane_reps:
-            continue
-        for d, cats in dates_dict.items():
-            if d in meetings_by_category_by_date:
-                meetings_by_category_by_date[d]["fu"]    += cats.get("fu", 0)
-                meetings_by_category_by_date[d]["resch"] += cats.get("resch", 0)
-                meetings_by_category_by_date[d]["other"] += cats.get("other", 0)
+    # Team-level F/U / Resch / Other counts per date — for the hero card breakdown.
+    # F/U and Resch are summed from the title-classified per-rep counts.
+    # "Other" is computed at team level as Total - F/U - Resch - NewCalls so it
+    # explicitly EXCLUDES new sales calls (which are shown separately in the card
+    # headline). Clamped to >= 0 in case a meeting is both F/U-titled AND tied to a
+    # brand-new sales call lead.
+    #   Invariant: fu + resch + other + new_calls == total_meetings (typically)
+    meetings_by_category_by_date = {}
+    for d in dates:
+        fu = 0
+        resch = 0
+        for uid, dates_dict in (rep_meetings_by_category or {}).items():
+            if lane_reps and uid not in lane_reps:
+                continue
+            cats = dates_dict.get(d, {})
+            fu    += cats.get("fu", 0)
+            resch += cats.get("resch", 0)
+
+        new_calls_for_day = daily_data[d]["booked"]
+        total_for_day = total_meetings_by_date[d]
+        other = max(0, total_for_day - fu - resch - new_calls_for_day)
+
+        meetings_by_category_by_date[d] = {"fu": fu, "resch": resch, "other": other}
 
     return {
         "dates": dates,
@@ -1320,7 +1332,7 @@ body { font-family: 'Inter', -apple-system, system-ui, sans-serif; background: #
 .header .right .time { font-size: 0.65rem; color: #a3c4a3; }
 .dot { display: inline-block; width: 7px; height: 7px; background: #4ade80; border-radius: 50%; margin-right: 5px; }
 .wrap { padding: 1rem 1.5rem 2rem; max-width: 1500px; margin: 0 auto; }
-.sec { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #1b5e1b; padding: 0.55rem 0.6rem 0.3rem; border-left: 3px solid #1b5e1b; background: #f8faf8; }
+.sec { font-size: 0.58rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #1b5e1b; padding: 0.3rem 0.6rem 0.18rem; border-left: 3px solid #1b5e1b; background: #f8faf8; }
 .card { border: 1px solid #d4d4d4; border-radius: 4px; overflow-x: auto; margin-bottom: 1rem; background: #fff; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 th { padding: 0.5rem 0.6rem; font-size: 0.68rem; font-weight: 700; text-align: center; color: #555; border-bottom: 2px solid #d4d4d4; white-space: nowrap; background: #fafafa; line-height: 1.4; }
@@ -1825,13 +1837,14 @@ def generate_rolling_html(team_data, team_detail=None):
     .hero-card.is-today { border-color:#1b7a2e; }
     .hero-card.is-past  { background:#fafafa; }
 
-    .hc-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+    .hc-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; gap:12px; }
+    .hc-header-text { display:flex; flex-direction:column; }
     .hc-day-label { font-size:0.7rem; color:#888; font-weight:700; text-transform:uppercase;
-                    letter-spacing:0.05em; }
+                    letter-spacing:0.05em; line-height:1.1; }
     .hero-slot-current .hc-day-label { font-size:0.78rem; color:#1b7a2e; }
-    .hc-title { font-size:0.85rem; font-weight:700; color:#333; }
+    .hc-title { font-size:0.85rem; font-weight:700; color:#333; margin-top:2px; line-height:1.15; }
     .hero-slot-current .hc-title { font-size:1rem; }
-    .hc-headline { font-size:2rem; font-weight:800; color:#1b7a2e; line-height:1; }
+    .hc-headline { font-size:2rem; font-weight:800; color:#1b7a2e; line-height:0.9; }
     .hero-slot-current .hc-headline { font-size:2.6rem; }
     .hero-slot-prev .hc-headline, .hero-slot-next .hc-headline { font-size:1.6rem; }
 
@@ -1849,6 +1862,9 @@ def generate_rolling_html(team_data, team_detail=None):
     .hero-slot-current .hc-row-child { font-size:0.84rem; }
     .hc-row-child .hc-row-value { color:#666; font-weight:600; }
     .hc-row-missed .hc-row-value { color:#c0392b; }
+    /* Total-summary row at the bottom of the breakdown — sits under F/U / Resch / Other */
+    .hc-row-total { font-weight:700; border-top:1px solid #e5e5e5; margin-top:4px; padding-top:5px; }
+    .hc-row-total .hc-row-label { color:#1a1a1a; }
 
     .hc-footer { margin-top:auto; padding-top:10px; border-top:1px solid #e5e5e5;
                  display:flex; justify-content:space-between; align-items:baseline; }
@@ -1979,13 +1995,18 @@ def generate_rolling_html(team_data, team_detail=None):
 
       var dayLabel = c.is_today ? '► TODAY' : c.weekday_short.toUpperCase() + ' ' + c.month_day;
 
-      // Open Calendar Slots section: hide entirely for past days that have –
-      var openVal = (c.open_slots === null || c.open_slots === undefined) ? '–' : c.open_slots;
-      var missedVal = (c.missed === null || c.missed === undefined) ? '–' : c.missed;
+      var openVal   = (c.open_slots === null || c.open_slots === undefined) ? '–' : c.open_slots;
+      var missedVal = (c.missed     === null || c.missed     === undefined) ? '–' : c.missed;
+
+      // Footer label includes the actual target value when available (e.g. "New Meetings Goal % (44)").
+      // Weekends have no target, so just show the label.
+      var goalLabel = (c.target !== null && c.target !== undefined)
+        ? 'New Meetings Goal % (' + c.target + ')'
+        : 'New Meetings Goal %';
 
       return '<div class="' + classes.join(' ') + '">' +
         '<div class="hc-header">' +
-          '<div>' +
+          '<div class="hc-header-text">' +
             '<div class="hc-day-label">' + dayLabel + '</div>' +
             '<div class="hc-title">New Meetings Booked</div>' +
           '</div>' +
@@ -1993,21 +2014,21 @@ def generate_rolling_html(team_data, team_detail=None):
         '</div>' +
         '<hr class="hc-sep">' +
         '<div class="hc-section">' +
-          '<div class="hc-row hc-row-parent">' +
-            '<span class="hc-row-label">Total Meetings Booked</span>' +
-            '<span class="hc-row-value">' + c.total_meetings + '</span>' +
-          '</div>' +
-          '<div class="hc-row hc-row-child">' +
+          '<div class="hc-row">' +
             '<span class="hc-row-label">F/U Meetings</span>' +
             '<span class="hc-row-value">' + c.fu + '</span>' +
           '</div>' +
-          '<div class="hc-row hc-row-child">' +
+          '<div class="hc-row">' +
             '<span class="hc-row-label">Resch. Meetings</span>' +
             '<span class="hc-row-value">' + c.resch + '</span>' +
           '</div>' +
-          '<div class="hc-row hc-row-child">' +
+          '<div class="hc-row">' +
             '<span class="hc-row-label">Other</span>' +
             '<span class="hc-row-value">' + c.other + '</span>' +
+          '</div>' +
+          '<div class="hc-row hc-row-total">' +
+            '<span class="hc-row-label">Total Meetings Booked</span>' +
+            '<span class="hc-row-value">' + c.total_meetings + '</span>' +
           '</div>' +
         '</div>' +
         '<div class="hc-section">' +
@@ -2021,7 +2042,7 @@ def generate_rolling_html(team_data, team_detail=None):
           '</div>' +
         '</div>' +
         '<div class="hc-footer">' +
-          '<span class="hc-footer-label">New Meetings Target</span>' +
+          '<span class="hc-footer-label">' + goalLabel + '</span>' +
           fmtPct(c.target_pct, c.target_class) +
         '</div>' +
       '</div>';
