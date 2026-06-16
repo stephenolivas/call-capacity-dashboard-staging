@@ -900,7 +900,7 @@ def classify_meeting_title(title):
     return "other"
 
 
-def fetch_rep_total_meetings(start_date, end_date, all_lane_user_ids, lead_to_funnel=None):
+def fetch_rep_total_meetings(start_date, end_date, all_lane_user_ids, lead_to_funnel=None, leads_with_fscbd=None):
     """Fetch total non-internal meetings per rep per date in the window.
 
     Counts ALL meetings (first calls + follow-ups + reschedules + Q&A + onboarding etc.)
@@ -917,14 +917,24 @@ def fetch_rep_total_meetings(start_date, end_date, all_lane_user_ids, lead_to_fu
     lead_to_funnel: {lead_id: funnel_name} for restriction checks. If None or a lead is
     missing, restricted reps' meetings for that lead are excluded (conservative default).
 
+    leads_with_fscbd: set of (lead_id, date) pairs where the lead has First Sales Call Booked
+    Date set to that date. Used in the priority hierarchy below — a meeting whose lead is in
+    this set is classified as "new" (not F/U / Resch / Other) regardless of its title.
+
     Returns: (rep_totals, rep_categories) where:
-      rep_totals     = {user_id: {date: count}}                       — total meetings
-      rep_categories = {user_id: {date: {"fu": N, "resch": N, "other": N}}}
-                       — same meetings classified by title pattern; fu+resch+other == total
+      rep_totals     = {user_id: {date: count}}                                 — total meetings
+      rep_categories = {user_id: {date: {"fu": N, "resch": N, "other": N}}}     — non-new meetings
+                       classified by title (priority hierarchy: lead-FSCBD wins
+                       over title patterns). "new" meetings are NOT in rep_categories — they're
+                       counted separately via daily_data[d]["booked"] (lead-based).
+                       Math invariant (per date, no double-count):
+                         new (lead-based) + fu + resch + other == total
+                       Small discrepancies possible from canceled meetings of FSCBD leads.
     """
     log("📥 Fetching all rep meetings in window for Total Calls row + card breakdowns...")
     step_start = time.time()
     lead_to_funnel = lead_to_funnel or {}
+    leads_with_fscbd = leads_with_fscbd or set()
 
     # Server-side date filter — Close ignores unknown params, so if these aren't
     # honored we just paginate more pages and the client-side date check still works.
@@ -1003,10 +1013,18 @@ def fetch_rep_total_meetings(start_date, end_date, all_lane_user_ids, lead_to_fu
             rep_totals.setdefault(user_id, {}).setdefault(meeting_date, 0)
             rep_totals[user_id][meeting_date] += 1
 
-            # Classify by title for the hero card breakdown
-            category = classify_meeting_title(title)
+            # Priority hierarchy:
+            #   1) lead has FSCBD == meeting date → "new"  (NOT tracked in rep_categories;
+            #      counted separately via daily_data[d]["booked"] which is lead-based)
+            #   2) title matches F/U pattern → "fu"
+            #   3) title matches Resch pattern → "resch"
+            #   4) otherwise → "other"
+            # This guarantees each meeting is counted in exactly one bucket — no double-count
+            # of a "new" meeting that happens to be titled with "F/U" or similar.
             rep_categories.setdefault(user_id, {}).setdefault(meeting_date, {"fu": 0, "resch": 0, "other": 0})
-            rep_categories[user_id][meeting_date][category] += 1
+            if (lead_id, meeting_date) not in leads_with_fscbd:
+                category = classify_meeting_title(title)
+                rep_categories[user_id][meeting_date][category] += 1
 
             kept_count += 1
 
@@ -1226,27 +1244,26 @@ def build_dashboard_data(field_leads, dates, today=None, lane_reps=None, lane_la
                 total_meetings_by_date[d] += count
 
     # Team-level F/U / Resch / Other counts per date — for the hero card breakdown.
-    # F/U and Resch are summed from the title-classified per-rep counts.
-    # "Other" is computed at team level as Total - F/U - Resch - NewCalls so it
-    # explicitly EXCLUDES new sales calls (which are shown separately in the card
-    # headline). Clamped to >= 0 in case a meeting is both F/U-titled AND tied to a
-    # brand-new sales call lead.
-    #   Invariant: fu + resch + other + new_calls == total_meetings (typically)
+    # All three are summed directly from per-rep priority-classified counts.
+    # Priority hierarchy in fetch_rep_total_meetings guarantees no double-count:
+    #   - "new" meetings (lead has FSCBD == meeting date) were excluded from rep_categories
+    #   - F/U / Resch / Other are mutually exclusive (title-based)
+    #
+    # Card math (per date, assuming no canceled-meeting discrepancies):
+    #   new (lead-based, daily_data["booked"]) + fu + resch + other ≈ total_meetings
+    # The hero card displays total = new + fu + resch + other so the math always adds up,
+    # which may differ slightly from the raw all-meetings count when leads have FSCBD set
+    # but their meeting was canceled.
     meetings_by_category_by_date = {}
     for d in dates:
-        fu = 0
-        resch = 0
+        fu = resch = other = 0
         for uid, dates_dict in (rep_meetings_by_category or {}).items():
             if lane_reps and uid not in lane_reps:
                 continue
             cats = dates_dict.get(d, {})
             fu    += cats.get("fu", 0)
             resch += cats.get("resch", 0)
-
-        new_calls_for_day = daily_data[d]["booked"]
-        total_for_day = total_meetings_by_date[d]
-        other = max(0, total_for_day - fu - resch - new_calls_for_day)
-
+            other += cats.get("other", 0)
         meetings_by_category_by_date[d] = {"fu": fu, "resch": resch, "other": other}
 
     return {
@@ -1332,7 +1349,7 @@ body { font-family: 'Inter', -apple-system, system-ui, sans-serif; background: #
 .header .right .time { font-size: 0.65rem; color: #a3c4a3; }
 .dot { display: inline-block; width: 7px; height: 7px; background: #4ade80; border-radius: 50%; margin-right: 5px; }
 .wrap { padding: 1rem 1.5rem 2rem; max-width: 1500px; margin: 0 auto; }
-.sec { font-size: 0.58rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #1b5e1b; padding: 0.3rem 0.6rem 0.18rem; border-left: 3px solid #1b5e1b; background: #f8faf8; }
+th.sec-label { color: #1b5e1b; font-size: 0.6rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; background: #f8faf8; border-left: 3px solid #1b5e1b; }
 .card { border: 1px solid #d4d4d4; border-radius: 4px; overflow-x: auto; margin-bottom: 1rem; background: #fff; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 th { padding: 0.5rem 0.6rem; font-size: 0.68rem; font-weight: 700; text-align: center; color: #555; border-bottom: 2px solid #d4d4d4; white-space: nowrap; background: #fafafa; line-height: 1.4; }
@@ -1380,8 +1397,8 @@ tr.section-label-row.sec-ltf td { color: #1b3a5e; background: #f0f4ff; border-to
 .ltf-total { color: #1a1a1a; font-weight: 700; }
 .ltf-pct { color: #666; font-weight: 500; font-size: 0.7rem; }
 .ltf-collapsible { margin-bottom: 1rem; }
-.ltf-collapsible summary { font-size: 0.72rem; font-weight: 600; color: #1b3a5e; cursor: pointer; padding: 0.5rem 0.6rem; background: #f0f4ff; border: 1px solid #d4d4d4; border-radius: 4px; }
-.ltf-collapsible summary:hover { background: #e4eaff; }
+.ltf-collapsible summary { font-size: 0.72rem; font-weight: 600; color: #1b5e1b; cursor: pointer; padding: 0.5rem 0.6rem; background: #f8faf8; border: 1px solid #d4d4d4; border-left: 3px solid #1b5e1b; border-radius: 4px; }
+.ltf-collapsible summary:hover { background: #eef5ee; }
 .ltf-collapsible details[open] summary { border-radius: 4px 4px 0 0; border-bottom: none; }
 .ltf-collapsible details[open] .card { margin-top: 0 !important; border-top: none; border-radius: 0 0 4px 4px; }
 @media (max-width: 900px) { .header { padding: 0.6rem 0.75rem; } .wrap { padding: 0.5rem 0.75rem; } .summary-cards { grid-template-columns: 1fr; } }
@@ -1535,7 +1552,6 @@ def generate_lane_content(data, dates, today, daily_goal_map, n_cols, lane_rep_n
     # ── Hero Card Data (Phase 2) ──────────────────────────────────────────────
     # Build per-date card payloads. JS picks 3 to render (prev/current/next) based
     # on a focused index pointer. All 13 days are pre-rendered as JSON below.
-    total_meetings_by_date = data.get("total_meetings_by_date", {})
     cats_by_date = data.get("meetings_by_category_by_date", {})
     card_data = {}
     for d in dates:
@@ -1544,8 +1560,12 @@ def generate_lane_content(data, dates, today, daily_goal_map, n_cols, lane_rep_n
         cal_slots = daily[d].get("calendly_available")  # Live open Calendly slots
         max_total = daily[d].get("max_calendar_availability")
         day_target = get_capacity_target(d)
-        total_meet = total_meetings_by_date.get(d, 0)
         cats = cats_by_date.get(d, {"fu": 0, "resch": 0, "other": 0})
+
+        # Card "Total Meetings Booked" = New + F/U + Resch + Other (definitional, math always works).
+        # Each meeting is counted in exactly one bucket via priority hierarchy in
+        # fetch_rep_total_meetings, so this sum reflects all classifiable meetings on the calendar.
+        total_meet = b + cats["fu"] + cats["resch"] + cats["other"]
 
         # Booking Window Missed = max_total - booked - open (only meaningful for today + past)
         missed_val = None
@@ -1614,7 +1634,7 @@ def generate_lane_content(data, dates, today, daily_goal_map, n_cols, lane_rep_n
 
     for uid in sorted_uids:
         rep_name = lane_rep_names.get(uid, uid)
-        badge = ' <span style="background:#2563eb;color:#fff;font-size:0.6rem;padding:1px 6px;border-radius:3px;margin-left:4px;">Lead</span>' if uid == lane_lead else ""
+        badge = ' <span style="background:#1b7a2e;color:#fff;font-size:0.6rem;padding:1px 6px;border-radius:3px;margin-left:4px;">Lead</span>' if uid == lane_lead else ""
         day_data = rep_data.get(uid, {})
         rep_total_by_date = rep_total_meetings.get(uid, {})
 
@@ -1668,28 +1688,25 @@ def generate_lane_content(data, dates, today, daily_goal_map, n_cols, lane_rep_n
     rep_summary = "Rep Details — " + " · ".join(rep_summary_parts) if rep_summary_parts else "Rep Details — No calls"
 
     # Build section HTML, only include sections with rows
-    # Each table gets a clickable date header thead — secondary entry point to the day detail panel
-    # (primary entry point is clicking the focused hero card).
+    # Section label sits IN the first cell of the date header row — visually aligned
+    # with the date columns, no longer a banner above the table.
     funnel_html = ""
     if inh_rows:
         funnel_html += f"""
-    <div class="sec">FUNNEL BREAKDOWN — IN-HOUSE</div>
     <table><colgroup><col style="width:200px"><col span="{n_cols}"></colgroup>
-      <thead><tr><th></th>{date_headers}</tr></thead>
+      <thead><tr><th class="sec-label">FUNNEL BREAKDOWN — IN-HOUSE</th>{date_headers}</tr></thead>
       <tbody>{inh_rows}</tbody>
     </table>"""
     if ext_rows:
         funnel_html += f"""
-    <div class="sec">FUNNEL BREAKDOWN — EXTERNAL</div>
     <table><colgroup><col style="width:200px"><col span="{n_cols}"></colgroup>
-      <thead><tr><th></th>{date_headers}</tr></thead>
+      <thead><tr><th class="sec-label">FUNNEL BREAKDOWN — EXTERNAL</th>{date_headers}</tr></thead>
       <tbody>{ext_rows}</tbody>
     </table>"""
     if unc_rows:
         funnel_html += f"""
-    <div class="sec">FUNNEL BREAKDOWN — UNCATEGORIZED</div>
     <table><colgroup><col style="width:200px"><col span="{n_cols}"></colgroup>
-      <thead><tr><th></th>{date_headers}</tr></thead>
+      <thead><tr><th class="sec-label">FUNNEL BREAKDOWN — UNCATEGORIZED</th>{date_headers}</tr></thead>
       <tbody>{unc_rows}</tbody>
     </table>"""
 
@@ -1846,7 +1863,9 @@ def generate_rolling_html(team_data, team_detail=None):
     .hero-slot-current .hc-title { font-size:1rem; }
     .hc-headline { font-size:2rem; font-weight:800; color:#1b7a2e; line-height:0.9; }
     .hero-slot-current .hc-headline { font-size:2.6rem; }
-    .hero-slot-prev .hc-headline, .hero-slot-next .hc-headline { font-size:1.6rem; }
+    /* Side cards: smaller headline. Shift it down so it visually aligns with the
+       "New Meetings Booked" title line rather than sitting up next to the day label. */
+    .hero-slot-prev .hc-headline, .hero-slot-next .hc-headline { font-size:1.6rem; margin-top:14px; }
 
     .hc-sep { border:none; border-top:1px solid #e5e5e5; margin:6px 0 10px; }
 
@@ -1862,8 +1881,9 @@ def generate_rolling_html(team_data, team_detail=None):
     .hero-slot-current .hc-row-child { font-size:0.84rem; }
     .hc-row-child .hc-row-value { color:#666; font-weight:600; }
     .hc-row-missed .hc-row-value { color:#c0392b; }
-    /* Total-summary row at the bottom of the breakdown — sits under F/U / Resch / Other */
-    .hc-row-total { font-weight:700; border-top:1px solid #e5e5e5; margin-top:4px; padding-top:5px; }
+    /* Total-summary row at the bottom of the breakdown — sits under F/U / Resch / Other.
+       Separator line BELOW the Total row (between Total and Open Calendar Slots). */
+    .hc-row-total { font-weight:700; margin-top:4px; padding-bottom:6px; border-bottom:1px solid #e5e5e5; }
     .hc-row-total .hc-row-label { color:#1a1a1a; }
 
     .hc-footer { margin-top:auto; padding-top:10px; border-top:1px solid #e5e5e5;
@@ -2762,16 +2782,32 @@ def main():
 
     # Build lead_id → funnel map so fetch_rep_total_meetings can apply funnel restrictions
     # (e.g., Joe Dysert's overflow Internal Webinar calls only)
+    # Build lookup maps for fetch_rep_total_meetings:
+    #   lead_to_funnel    — funnel name per lead (for LANE_FUNNEL_RESTRICTIONS)
+    #   leads_with_fscbd  — set of (lead_id, date) pairs where lead has First Sales Call Booked Date
+    #                       set to that date. Used for the priority hierarchy in meeting classification:
+    #                       a meeting whose lead has FSCBD == meeting date is "new" regardless of title.
     lead_to_funnel = {}
+    leads_with_fscbd = set()
     for lead in field_leads:
         lid = lead.get("id")
-        if lid:
-            lead_to_funnel[lid] = map_funnel(lead.get(FIELD_FUNNEL_NAME_DEAL) or "")
+        if not lid:
+            continue
+        lead_to_funnel[lid] = map_funnel(lead.get(FIELD_FUNNEL_NAME_DEAL) or "")
+        fscbd_str = lead.get(FIELD_FIRST_SALES_CALL)
+        if fscbd_str:
+            try:
+                fscbd_date = date.fromisoformat(fscbd_str)
+                leads_with_fscbd.add((lid, fscbd_date))
+            except (ValueError, TypeError):
+                pass
 
     # Fetch total meetings per rep (includes follow-ups, reschedules, Q&A, etc.)
     # Used for the "Total Calls" reconciliation row in rep details AND the hero card
-    # F/U / Resch / Other breakdown.
-    rep_total_meetings, rep_meetings_by_category = fetch_rep_total_meetings(rolling_start, rolling_end, ALL_LANE_REPS, lead_to_funnel)
+    # F/U / Resch / Other breakdown (priority-classified: new > fu > resch > other).
+    rep_total_meetings, rep_meetings_by_category = fetch_rep_total_meetings(
+        rolling_start, rolling_end, ALL_LANE_REPS, lead_to_funnel, leads_with_fscbd
+    )
 
     log("\n── Team (single-team mode) ──")
     team_data = build_dashboard_data(field_leads, rolling_dates, today=today, lane_reps=ALL_LANE_REPS, lane_label="Team", rep_total_meetings=rep_total_meetings, rep_meetings_by_category=rep_meetings_by_category)
