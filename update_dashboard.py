@@ -1349,7 +1349,7 @@ body { font-family: 'Inter', -apple-system, system-ui, sans-serif; background: #
 .header .right .time { font-size: 0.65rem; color: #a3c4a3; }
 .dot { display: inline-block; width: 7px; height: 7px; background: #4ade80; border-radius: 50%; margin-right: 5px; }
 .wrap { padding: 1rem 1.5rem 2rem; max-width: 1500px; margin: 0 auto; }
-th.sec-label { color: #1b5e1b; font-size: 0.5rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; background: #f8faf8; border-left: 3px solid #1b5e1b; }
+th.sec-label { color: #1b5e1b; font-size: 0.6rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; background: #f8faf8; border-left: 3px solid #1b5e1b; }
 .card { border: 1px solid #d4d4d4; border-radius: 4px; overflow-x: auto; margin-bottom: 1rem; background: #fff; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 th { padding: 0.5rem 0.6rem; font-size: 0.68rem; font-weight: 700; text-align: center; color: #555; border-bottom: 2px solid #d4d4d4; white-space: nowrap; background: #fafafa; line-height: 1.4; }
@@ -1572,8 +1572,12 @@ def generate_lane_content(data, dates, today, daily_goal_map, n_cols, lane_rep_n
         if max_total and max_total > 0 and cal_slots is not None and d <= today:
             missed_val = max(0, max_total - b - cal_slots)
 
-        # Open slots: prefer live Calendly value; fall back to static capacity diff if needed
-        if cal_slots is not None:
+        # Open slots: prefer live Calendly value; fall back to static capacity diff for
+        # today / future only. Past days never have "open slots" — they're done — so we
+        # force None regardless of any leftover capacity number that might be in daily_data.
+        if d < today:
+            open_slots = None
+        elif cal_slots is not None:
             open_slots = cal_slots
         elif daily[d]["capacity"] > 0:
             open_slots = max(0, daily[d]["capacity"] - b)
@@ -1694,19 +1698,19 @@ def generate_lane_content(data, dates, today, daily_goal_map, n_cols, lane_rep_n
     if inh_rows:
         funnel_html += f"""
     <table><colgroup><col style="width:200px"><col span="{n_cols}"></colgroup>
-      <thead><tr><th class="sec-label">FUNNEL BREAKDOWN — IN-HOUSE</th>{date_headers}</tr></thead>
+      <thead><tr><th class="sec-label">FUNNEL DETAILS — IN-HOUSE</th>{date_headers}</tr></thead>
       <tbody>{inh_rows}</tbody>
     </table>"""
     if ext_rows:
         funnel_html += f"""
     <table><colgroup><col style="width:200px"><col span="{n_cols}"></colgroup>
-      <thead><tr><th class="sec-label">FUNNEL BREAKDOWN — EXTERNAL</th>{date_headers}</tr></thead>
+      <thead><tr><th class="sec-label">FUNNEL DETAILS — EXTERNAL</th>{date_headers}</tr></thead>
       <tbody>{ext_rows}</tbody>
     </table>"""
     if unc_rows:
         funnel_html += f"""
     <table><colgroup><col style="width:200px"><col span="{n_cols}"></colgroup>
-      <thead><tr><th class="sec-label">FUNNEL BREAKDOWN — UNCATEGORIZED</th>{date_headers}</tr></thead>
+      <thead><tr><th class="sec-label">FUNNEL DETAILS — UNCATEGORIZED</th>{date_headers}</tr></thead>
       <tbody>{unc_rows}</tbody>
     </table>"""
 
