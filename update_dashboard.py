@@ -1349,7 +1349,7 @@ body { font-family: 'Inter', -apple-system, system-ui, sans-serif; background: #
 .header .right .time { font-size: 0.65rem; color: #a3c4a3; }
 .dot { display: inline-block; width: 7px; height: 7px; background: #4ade80; border-radius: 50%; margin-right: 5px; }
 .wrap { padding: 1rem 1.5rem 2rem; max-width: 1500px; margin: 0 auto; }
-th.sec-label { color: #1b5e1b; font-size: 0.6rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; background: #f8faf8; border-left: 3px solid #1b5e1b; }
+th.sec-label { color: #1b5e1b; font-size: 0.55rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; background: #f8faf8; border-left: 3px solid #1b5e1b; }
 .card { border: 1px solid #d4d4d4; border-radius: 4px; overflow-x: auto; margin-bottom: 1rem; background: #fff; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 th { padding: 0.5rem 0.6rem; font-size: 0.68rem; font-weight: 700; text-align: center; color: #555; border-bottom: 2px solid #d4d4d4; white-space: nowrap; background: #fafafa; line-height: 1.4; }
@@ -1870,6 +1870,9 @@ def generate_rolling_html(team_data, team_detail=None):
     .hc-sep { border:none; border-top:1px solid #e5e5e5; margin:6px 0 10px; }
 
     .hc-section { margin-bottom:8px; }
+    /* Push the Open Calendar Slots section down a bit — gives the card better
+       vertical balance and prevents it crowding the Total breakdown above. */
+    .hc-section + .hc-section { margin-top:16px; }
     .hc-row { display:flex; justify-content:space-between; align-items:baseline; padding:2px 0;
               font-size:0.82rem; }
     .hero-slot-current .hc-row { font-size:0.92rem; }
