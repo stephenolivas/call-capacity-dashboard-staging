@@ -1350,6 +1350,9 @@ body { font-family: 'Inter', -apple-system, system-ui, sans-serif; background: #
 .dot { display: inline-block; width: 7px; height: 7px; background: #4ade80; border-radius: 50%; margin-right: 5px; }
 .wrap { padding: 1rem 1.5rem 2rem; max-width: 1500px; margin: 0 auto; }
 th.sec-label { color: #1b5e1b; font-size: 0.6rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; background: #f8faf8; border-left: 3px solid #1b5e1b; }
+/* Compact modifier — applied to longer labels (e.g. UNCATEGORIZED) so they fit
+   in the 200px first column without forcing the other labels smaller too. */
+th.sec-label.is-compact { font-size: 0.52rem; letter-spacing: 0.05em; }
 .card { border: 1px solid #d4d4d4; border-radius: 4px; overflow-x: auto; margin-bottom: 1rem; background: #fff; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 th { padding: 0.5rem 0.6rem; font-size: 0.68rem; font-weight: 700; text-align: center; color: #555; border-bottom: 2px solid #d4d4d4; white-space: nowrap; background: #fafafa; line-height: 1.4; }
@@ -1710,7 +1713,7 @@ def generate_lane_content(data, dates, today, daily_goal_map, n_cols, lane_rep_n
     if unc_rows:
         funnel_html += f"""
     <table><colgroup><col style="width:200px"><col span="{n_cols}"></colgroup>
-      <thead><tr><th class="sec-label">FUNNEL DETAILS — UNCATEGORIZED</th>{date_headers}</tr></thead>
+      <thead><tr><th class="sec-label is-compact">FUNNEL DETAILS — UNCATEGORIZED</th>{date_headers}</tr></thead>
       <tbody>{unc_rows}</tbody>
     </table>"""
 
@@ -1874,9 +1877,9 @@ def generate_rolling_html(team_data, team_detail=None):
     .hc-sep { border:none; border-top:1px solid #e5e5e5; margin:6px 0 10px; }
 
     .hc-section { margin-bottom:8px; }
-    /* Push the Open Calendar Slots section down a touch — gives the card better
-       vertical balance without leaving a gaping hole above. */
-    .hc-section + .hc-section { margin-top:8px; }
+    /* Slight gap between Total breakdown and Open Calendar Slots — just enough
+       to feel like distinct sections without leaving an awkward dead zone. */
+    .hc-section + .hc-section { margin-top:4px; }
     .hc-row { display:flex; justify-content:space-between; align-items:baseline; padding:2px 0;
               font-size:0.82rem; }
     .hero-slot-current .hc-row { font-size:0.92rem; }
